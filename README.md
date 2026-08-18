@@ -1,136 +1,268 @@
-# RS-BA1 Reverse Engineering Project
+# rsba1-core
 
-**完全逆向 Icom RS-BA1 V2 远程控制软件** — 理解其通信协议并实现跨平台替代方案。
+**Pure Python implementation of the Icom RS-BA1 V2 protocol stack — control IC-705, IC-9700 and any CI-V transceiver over the network. No Icom binaries required.**
 
-## 项目目标
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-green.svg)](https://python.org)
+[![CI](https://github.com/fe1iscurc0r/rsba1-core/actions/workflows/ci.yml/badge.svg)](https://github.com/fe1iscurc0r/rsba1-core/actions)
 
-| Phase | 目标 | 状态 |
-|-------|------|------|
-| Phase 0 | 原材料收集（已安装的 exe/DLL/INI） | ✅ 完成 |
-| Phase 1 | 安装包拆解 + 文件提取 | ✅ 完成 |
-| Phase 2 | PE 静态逆向核心 DLL（CivCtrl/HidCtrl/UtyCtrl） + 主程序 | ✅ 完成 |
-| Phase 3 | CI-V 协议文档化 + 指令表完整映射 | ✅ 完成 |
-| **Phase 4** | **Python 核心库（跨平台 CLI）** | **⬜ 进行中** |
-| Phase 5 | C++/Qt6 桌面 GUI（Windows .exe） | ⬜ 远期 |
-| Phase 6 | Android 前端（APK / Flutter） | ⬜ 远期 |
+## What is this?
 
-## 项目总览
+Icom's RS-BA1 software lets you remote-control Icom transceivers over LAN/Internet. It's Windows-only and closed-source. This project reverse-engineers the RS-BA1 protocol and provides a **pure Python replacement** that runs anywhere Python runs.
 
-### 架构演进路线
+You get:
+- A pure Python CI-V protocol stack (no DLLs, no Windows)
+- An MCP server for AI agent integration — "tune to 7.074 MHz" in natural language
+- A clean CLI for scripting
+- Cross-platform: Windows, Linux, macOS, Raspberry Pi
 
-```
-Phase 4 (当前)          Phase 5              Phase 6
-───────────────────    ────────────────    ────────────────
-Python 核心库           C++ Qt6 核心库       C++ Qt6 核心库
-  ├── ci_v.py           ├── libciv/          ├── libciv/
-  ├── udp_link.py       ├── libudp/          ├── libudp/
-  ├── audio.py          ├── libaudio/        ├── libaudio/
-  └── cli.py            │                    │
-                        ├── Desktop GUI      ├── Desktop GUI
-                        │ (Qt6 Widgets)      │ (Qt6 Widgets)
-                        └── Server/CLI       │
-                                             └── Android 前端
-                                              (Qt6 for Android
-                                               或 Flutter 桥接)
+Tested on: **IC-705** (real hardware, 2026-08-18 E2E verified)
 
-Python 阶段: 快速验证协议、跑通全链路
-C++/Qt6 阶段: 高性能桌面 GUI + 跨平台原生体验
+## Quick Start
+
+### 1. Prerequisites
+
+- Python 3.11 or later
+- IC-705 with RS-BA1 Server enabled (`MENU → SET → WLAN Set → Remote Settings → Remote Server → ON`)
+- IC-705 IP address and RS-BA1 username/password (set in the radio's remote settings)
+
+### 2. Install
+
+```bash
+pip install rsba1-core
 ```
 
-### 为什么分两阶段
+Or from source:
 
-Python 阶段解决 **"协议跑通了没"** 的问题——串口读写、CI-V 帧组包、UDP 三通道、音频流，这些逻辑用 Python 验证最快。
-
-C++/Qt6 阶段解决 **"好不好用"** 的问题——频谱/瀑布图要高性能渲染、GUI 要原生手感、单二进制部署省心。
-
-两阶段共享同一套接口定义（CI-V 帧格式、UDP 包结构、音频参数），协议在 Python 阶段定型后，Qt6 阶段直接翻译成 C++ 即可。
-
-## 原材料
-
-- `raw/exe/` — 已安装的 RS-BA1 程序（RemoteCtrl.exe + 4 个 DLL + dat）
-- `raw/ini/` — 各 Icom 机型 CI-V 配置（含 IC-705）
-- `raw/utility/` — RemoteUtility 套件（RemoteUty.exe + RadioSch.dll 等）
-
-详见 [`docs/材料清单.md`](docs/材料清单.md)
-
-## 仓库结构
-
-```
-rs-ba1-reverse/
-├── raw/                    # 原始文件
-│   ├── exe/               # RemoteCtrl.exe + DLL
-│   ├── ini/               # 各机型模型 INI
-│   └── utility/           # RemoteUtility 套件
-├── phase1-extraction/     # 拆包脚本 + 提取结果
-├── phase2-re/             # Ghidra 项目 + 分析笔记
-├── phase3-protocol/       # 协议文档化
-├── phase4-crossplat/      # 跨平台实现 ← 当前
-│   ├── rsba1/             # Python 核心库包
-│   │   ├── ci_v.py        # CI-V 串口协议
-│   │   ├── udp_link.py    # UDP 三通道通信
-│   │   ├── audio.py       # 音频流
-│   │   ├── hid_link.py    # USB HID 备选
-│   │   ├── models.py      # 机型配置
-│   │   └── cli.py         # 命令行入口
-│   ├── tests/             # 单元测试
-│   └── setup.py           # 打包
-├── phase5-qt6-desktop/    # Qt6 桌面 GUI（远期）
-├── phase6-android/        # Android 前端（远期）
-├── docs/                  # 文档
-└── tools/                 # 辅助工具脚本
+```bash
+git clone https://github.com/fe1iscurc0r/rsba1-core.git
+cd rsba1-core
+pip install -e ".[all]"
 ```
 
-## 技术栈
+### 3. Run
 
-### 当前 (Phase 4)
-- **语言**: Python 3.11+
-- **串口**: pyserial
-- **UDP 网络**: asyncio / socket
-- **音频**: pyaudio / sounddevice
-- **频谱**: matplotlib / numpy（可选）
-- **CLI**: click / argparse
-- **Web 可选**: FastAPI + uvicorn
+```bash
+# Set credentials as environment variables
+export RADIO_HOST=192.168.0.31
+export RADIO_USER=linnan
+export RADIO_PASSWORD=your_password
 
-### 远期 (Phase 5-6)
-- **语言**: C++17
-- **框架**: Qt6 (Widgets + SerialPort + Network)
-- **GUI 编译**: CMake + MinGW (Windows) / NDK (Android)
-- **音频**: Qt6 Multimedia
-- **频谱**: QCustomPlot / Qt6 Charts
+# One-shot command (no server needed)
+python -m rsba1.mcp read-freq
 
-## 逆向成果
+# Or start the MCP server for AI agent integration
+python -m rsba1.mcp
+```
 
-### 已分析 DLL
+### 4. One-command E2E test
 
-| DLL | 大小 | 导出 | 功能 |
-|-----|------|------|------|
-| HidCtrl.dll | 16KB | 10 | HID 传输层（重叠 I/O + 接收线程） |
-| CivCtrl.dll | 148KB | 18 | **CI-V 协议栈核心**（COM API 直连串口） |
-| UtyCtrl.dll | 200KB | 9 | 远程传输/状态/音频管理层 |
-| RS-BA1V2Ck.dll | 1.9MB | 1 | 许可证检查（含 GUI） |
+```bash
+python scripts/e2e_civ_loop.py \
+  --host 192.168.0.31 \
+  --user linnan \
+  --pwd your_password
+```
 
-### RemoteCtrl.exe 主程序
+Expected output:
+```
+=== E2E: RS-BA1 CI-V loopback 192.168.0.31 (user=linnan) ===
+[0] Original frequency: 144.920000 MHz
+[1] read_freq loop (3x)
+  1. 144.920000 MHz  mode=FM
+  2. 144.920000 MHz  mode=FM
+  3. 144.920000 MHz  mode=FM
+  ✓ All 3 reads stable at 144.920000 MHz
+=== PASS: all stages OK ===
+```
 
-| 项目 | 值 |
-|------|------|
-| 大小 | 42.9 MB |
-| 语言 | Borland Delphi（VCL 框架） |
-| 单元 | 48 个功能模块 |
-| 资源 | 930 张 BMP（38 MB）, 46 个 Delphi 表单 |
-| 音效 | 6 个 WAV（BEEP_ERR/OK/STBY/WC/EXIT） |
+## MCP Server
 
-### IC-705 CI-V 参数
+The MCP server exposes structured tools to any MCP-compatible AI client (Claude Desktop, Cursor, etc.).
 
-| 参数 | 值 |
-|------|-----|
-| CI-V 地址 | **0xA4** |
-| 控制器地址 | **0xE0** |
-| 默认波特率 | 19200（遥控）/ 115200（远程工具） |
-| 帧格式 | `FE FE TO FR DATA FD` |
-| 频率编码 | 5 字节 BCD |
+### AI Agent Integration
 
-详见 `phase3-protocol/ci-v-spec.md`
+```bash
+# Configure your AI client to use rsba1-core as an MCP tool.
+# Example ~/.config/claude-code/mcp_settings.json:
+{
+  "mcpServers": {
+    "ic705": {
+      "command": "python",
+      "args": ["-m", "rsba1.mcp"],
+      "env": {
+        "RADIO_HOST": "192.168.0.31",
+        "RADIO_USER": "linnan",
+        "RADIO_PASSWORD": "your_password"
+      }
+    }
+  }
+}
+```
 
-## 许可
+Then in your AI assistant:
+> "Tune the radio to 7.074 MHz and tell me the current mode"
+> "What's the S-meter reading right now?"
+> "Set the radio to 145 MHz FM and then read back the frequency"
 
-研究目的。RS-BA1 版权归 Icom Inc. 所有。
+### Available MCP Tools
+
+| Tool | Description |
+|------|-------------|
+| `read_freq` | Current VFO frequency in Hz |
+| `read_mode` | Mode (LSB/USB/AM/CW/FM/WFM) and filter |
+| `read_smeter` | S-meter raw value (0-255) |
+| `set_freq` | Set frequency in Hz (amateur bands only) |
+| `ptt` | Push-to-talk: `{"state":"tx"}` or `{"state":"rx"}` |
+| `get_status` | All of the above in one call |
+| `restore_freq` | Reset to frequency when MCP server started |
+| `shutdown` | Close radio connection cleanly |
+
+## CLI Reference
+
+```bash
+# Read frequency
+python -m rsba1.mcp read-freq
+
+# Set frequency (amateur band enforcement active)
+python -m rsba1.mcp set-freq 7074000
+
+# Read S-meter
+python -m rsba1.mcp read-smeter
+
+# PTT (WARNING: transmits!)
+python -m rsba1.mcp ptt tx
+python -m rsba1.mcp ptt rx
+
+# E2E loop test
+python scripts/e2e_civ_loop.py \
+  --host 192.168.0.31 --user linnan --pwd your_password
+
+# Dry run (validates setup without connecting)
+python scripts/e2e_civ_loop.py --dry-run
+```
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Your App / AI Agent                                    │
+│  (MCP client / CLI / Python import)                    │
+└───────────────────────┬─────────────────────────────────┘
+                        │ stdio / network
+┌───────────────────────▼─────────────────────────────────┐
+│  rsba1-core (pure Python, no native dependencies)       │
+│                                                         │
+│  radio_link.py — UDP socket session manager             │
+│    ├── Command channel (UDP 50001): login / auth        │
+│    └── Serial channel (UDP 50002): CI-V tunnel          │
+│                                                         │
+│  serial_codec.py — wire format encoding                  │
+│  civ_commands.py — CI-V frame construction               │
+└───────────────────────┬─────────────────────────────────┘
+                        │ UDP (stdlib socket only)
+┌───────────────────────▼─────────────────────────────────┐
+│  IC-705 built-in RS-BA1 server (or RemoteUty.exe)     │
+└─────────────────────────────────────────────────────────┘
+```
+
+Key design decisions:
+- **No Windows APIs**: uses only Python stdlib `socket` — runs on Linux/macOS/Windows
+- **No Icom binaries**: fully open-source protocol implementation
+- **RadioLink session reuse**: one UDP session per server instance, not per call
+- **Amateur band whitelist**: out-of-band frequencies are rejected before transmission
+
+## Frequency Bands (whitelist)
+
+Setting frequencies outside these bands is rejected by `set_freq`:
+
+| Band | Frequency Range (MHz) |
+|------|-----------------------|
+| 160m | 1.800 – 2.000 |
+| 80m | 3.500 – 4.000 |
+| 60m | 5.330 – 5.368 |
+| 40m | 7.000 – 7.300 |
+| 30m | 10.100 – 10.150 |
+| 20m | 14.000 – 14.350 |
+| 17m | 18.068 – 18.168 |
+| 15m | 21.000 – 21.450 |
+| 12m | 24.890 – 24.990 |
+| 10m | 28.000 – 29.700 |
+| 6m | 50.000 – 54.000 |
+| 2m | 144.000 – 148.000 |
+| 70cm | 420.000 – 450.000 |
+
+## Hardware & Connection Requirements
+
+### Tested hardware
+- **IC-705** firmware — E2E verified 2026-08-18
+
+### Connection modes
+| Mode | Prerequisites | Platform |
+|------|--------------|----------|
+| **Direct network** (recommended) | IC-705 WiFi/Ethernet, RS-BA1 Server enabled, credentials set | Any |
+| USB CI-V | CI-V USB cable (op. mode: CI-V) | Any |
+| RemoteUty proxy | RemoteUty.exe running on Windows PC | Any |
+
+### Setting up IC-705
+1. `MENU → SET → WLAN Set → Remote Settings → Remote Server → ON`
+2. `MENU → SET → WLAN Set → Remote Settings → Remote ID → Set username + password`
+3. Note the radio's IP address: `MENU → SET → WLAN Set → Information`
+
+## Testing
+
+```bash
+# Run full test suite (mock tests, no hardware required)
+python -m pytest tests/ -v
+
+# Run with hardware (IC-705 connected)
+python scripts/e2e_civ_loop.py \
+  --host 192.168.0.31 --user linnan --pwd your_password
+```
+
+## Repository Structure
+
+```
+src/rsba1/
+├── radio_link.py            # High-level session manager (RECOMMENDED)
+├── ctypes_wrappers/        # DLL call wrappers (reference only)
+├── serial/                  # UDP Serial channel (50002)
+│   ├── serial_codec.py     # Wire format encoding
+│   └── command_client.py   # UDP Command channel (50001)
+├── mailslot/               # Windows Mailslot IPC (deprecated)
+└── mcp/
+    ├── radio_link_server.py # Cross-platform MCP server (RECOMMENDED)
+    └── _server_mailslot_ref.py  # Windows-only reference
+```
+
+## Status & Limitations
+
+| Feature | Status |
+|---------|--------|
+| CI-V read (freq/mode/smeter) | ✅ Verified |
+| CI-V write (set_freq) | ✅ Verified |
+| PTT control | ✅ Verified |
+| Authentication (RS-BA1 credentials) | ✅ Verified |
+| Serial channel (UDP 50002) | ✅ Verified |
+| Command channel (UDP 50001) | ✅ Verified |
+| Audio streaming (UDP 50003) | ❌ Not implemented |
+| RemoteUty.exe proxy mode | ⚠️ Not tested |
+
+## Contributing
+
+Issues and pull requests welcome. When reporting bugs:
+1. Run `python scripts/e2e_civ_loop.py --dry-run` first to validate credentials
+2. Include `--host` and `--user` (redact password) and full error output
+3. Describe your hardware (radio model, firmware version)
+
+## Disclaimer
+
+This project is for **educational and research purposes only**.
+
+RS-BA1 V2 and Icom transceivers are proprietary products of **Icom Inc.** (https://www.icomjapan.com). This project is not affiliated with, endorsed by, or connected to Icom Inc. in any way.
+
+You are responsible for complying with applicable laws and Icom's license terms. Do not use this software to operate a transmitter without a valid amateur radio license.
+
+## License
+
+MIT — see [LICENSE](LICENSE) and [DISCLAIMER.md](DISCLAIMER.md).
