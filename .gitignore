@@ -1,0 +1,25 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+.pytest_cache/
+
+# 抓包原始/中间产物 (保留 parsed_*.txt/parsed_*.md 解析结果作证据)
+tools/pktmon_out/*.etl
+tools/pktmon_out/*.hex
+tools/pktmon_out/rsba1_serial*.txt
+tools/pktmon_out/rsba1_serial*.hex
+
+# 通用抓包/运行时噪声 (避免误提交原始流量, 可能含凭据密文/主机信息)
+*.pcap
+*.pcapng
+*.pcap.gz
+*.etl
+*.etlx
+*.hex
+*.dump
+frida_*.log
+frida_*.js.log
+pktmon_*.log
+nohup.out
