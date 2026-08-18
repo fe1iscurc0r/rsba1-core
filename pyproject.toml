@@ -1,0 +1,50 @@
+[project]
+name = "rsba1-core"
+version = "1.0.0"
+description = "Pure Python RS-BA1 protocol stack for Icom transceivers (IC-705, IC-9700)"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [{name = "Shen Yao", email = "shenyao@fe1iscurc0r"}]
+requires-python = ">=3.11"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Communications :: Radio",
+    "Topic :: Scientific/Engineering",
+]
+keywords = ["icom", "rs-ba1", "ci-v", "ic-705", "ic-9700", "ham-radio", "radio-control"]
+
+dependencies = []
+
+[project.optional-dependencies]
+mcp = ["fastmcp>=3.4.0"]
+serial = ["pyserial>=3.5"]
+windows = ["pywin32>=306"]
+dev = ["pytest>=7.0", "pytest-asyncio>=0.21"]
+all = ["fastmcp>=3.4.0", "pyserial>=3.5", "pywin32>=306", "pytest>=7.0", "pytest-asyncio>=0.21"]
+
+[project.scripts]
+rsba1 = "rsba1.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/fe1iscurc0r/rsba1-core"
+Documentation = "https://github.com/fe1iscurc0r/rsba1-core#readme"
+Repository = "https://github.com/fe1iscurc0r/rsba1-core"
+Issues = "https://github.com/fe1iscurc0r/rsba1-core/issues"
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+asyncio_mode = "auto"
