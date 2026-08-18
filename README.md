@@ -1,136 +1,148 @@
-# RS-BA1 Reverse Engineering Project
+# rsba1-core
 
-**完全逆向 Icom RS-BA1 V2 远程控制软件** — 理解其通信协议并实现跨平台替代方案。
+**Pure Python implementation of the Icom RS-BA1 V2 protocol stack — cross-platform radio control for IC-705, IC-9700 and other CI-V compatible transceivers.**
 
-## 项目目标
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-green.svg)](https://python.org)
 
-| Phase | 目标 | 状态 |
-|-------|------|------|
-| Phase 0 | 原材料收集（已安装的 exe/DLL/INI） | ✅ 完成 |
-| Phase 1 | 安装包拆解 + 文件提取 | ✅ 完成 |
-| Phase 2 | PE 静态逆向核心 DLL（CivCtrl/HidCtrl/UtyCtrl） + 主程序 | ✅ 完成 |
-| Phase 3 | CI-V 协议文档化 + 指令表完整映射 | ✅ 完成 |
-| **Phase 4** | **Python 核心库（跨平台 CLI）** | **⬜ 进行中** |
-| Phase 5 | C++/Qt6 桌面 GUI（Windows .exe） | ⬜ 远期 |
-| Phase 6 | Android 前端（APK / Flutter） | ⬜ 远期 |
+## What is this?
 
-## 项目总览
+RS-BA1 is Icom's official Windows software for remote control of their transceivers over LAN/Internet. This project reverse-engineers the RS-BA1 protocol to build a **platform-independent Python library** that can control IC-705 (and other CI-V radios) without Icom's binary components.
 
-### 架构演进路线
+You get:
+- A pure Python CI-V protocol stack (no DLL dependencies)
+- An MCP server for AI agent integration (Lumo/LMStudio/etc.)
+- CLI tools for scripting and automation
+- Cross-platform support (Windows/Linux/macOS)
 
-```
-Phase 4 (当前)          Phase 5              Phase 6
-───────────────────    ────────────────    ────────────────
-Python 核心库           C++ Qt6 核心库       C++ Qt6 核心库
-  ├── ci_v.py           ├── libciv/          ├── libciv/
-  ├── udp_link.py       ├── libudp/          ├── libudp/
-  ├── audio.py          ├── libaudio/        ├── libaudio/
-  └── cli.py            │                    │
-                        ├── Desktop GUI      ├── Desktop GUI
-                        │ (Qt6 Widgets)      │ (Qt6 Widgets)
-                        └── Server/CLI       │
-                                             └── Android 前端
-                                              (Qt6 for Android
-                                               或 Flutter 桥接)
+## Status
 
-Python 阶段: 快速验证协议、跑通全链路
-C++/Qt6 阶段: 高性能桌面 GUI + 跨平台原生体验
-```
+| Component | Status |
+|-----------|--------|
+| CI-V frame encoding/decoding | ✅ Stable |
+| Mailslot IPC (CivCtrl path) | ✅ Stable |
+| Serial channel (UDP 50002) | ✅ Stable |
+| Command channel (UDP 50001) | ✅ Stable |
+| FastMCP server (6 tools) | ✅ Stable |
+| **Real hardware E2E test** | ✅ Verified on IC-705 |
 
-### 为什么分两阶段
+See [docs/REVERSE_PLAN.md](docs/REVERSE_PLAN.md) for full reverse engineering documentation.
 
-Python 阶段解决 **"协议跑通了没"** 的问题——串口读写、CI-V 帧组包、UDP 三通道、音频流，这些逻辑用 Python 验证最快。
+## Quick Start
 
-C++/Qt6 阶段解决 **"好不好用"** 的问题——频谱/瀑布图要高性能渲染、GUI 要原生手感、单二进制部署省心。
+### Prerequisites
 
-两阶段共享同一套接口定义（CI-V 帧格式、UDP 包结构、音频参数），协议在 Python 阶段定型后，Qt6 阶段直接翻译成 C++ 即可。
+- Python 3.11+
+- IC-705 connected via USB (CI-V mode) or network (RS-BA1 remote mode)
+- RadioLink bridge running on Windows (for remote mode) — or use direct USB
 
-## 原材料
+### Installation
 
-- `raw/exe/` — 已安装的 RS-BA1 程序（RemoteCtrl.exe + 4 个 DLL + dat）
-- `raw/ini/` — 各 Icom 机型 CI-V 配置（含 IC-705）
-- `raw/utility/` — RemoteUtility 套件（RemoteUty.exe + RadioSch.dll 等）
-
-详见 [`docs/材料清单.md`](docs/材料清单.md)
-
-## 仓库结构
-
-```
-rs-ba1-reverse/
-├── raw/                    # 原始文件
-│   ├── exe/               # RemoteCtrl.exe + DLL
-│   ├── ini/               # 各机型模型 INI
-│   └── utility/           # RemoteUtility 套件
-├── phase1-extraction/     # 拆包脚本 + 提取结果
-├── phase2-re/             # Ghidra 项目 + 分析笔记
-├── phase3-protocol/       # 协议文档化
-├── phase4-crossplat/      # 跨平台实现 ← 当前
-│   ├── rsba1/             # Python 核心库包
-│   │   ├── ci_v.py        # CI-V 串口协议
-│   │   ├── udp_link.py    # UDP 三通道通信
-│   │   ├── audio.py       # 音频流
-│   │   ├── hid_link.py    # USB HID 备选
-│   │   ├── models.py      # 机型配置
-│   │   └── cli.py         # 命令行入口
-│   ├── tests/             # 单元测试
-│   └── setup.py           # 打包
-├── phase5-qt6-desktop/    # Qt6 桌面 GUI（远期）
-├── phase6-android/        # Android 前端（远期）
-├── docs/                  # 文档
-└── tools/                 # 辅助工具脚本
+```bash
+pip install .
 ```
 
-## 技术栈
+For MCP server only:
+```bash
+pip install ".[mcp]"
+```
 
-### 当前 (Phase 4)
-- **语言**: Python 3.11+
-- **串口**: pyserial
-- **UDP 网络**: asyncio / socket
-- **音频**: pyaudio / sounddevice
-- **频谱**: matplotlib / numpy（可选）
-- **CLI**: click / argparse
-- **Web 可选**: FastAPI + uvicorn
+### CLI Usage
 
-### 远期 (Phase 5-6)
-- **语言**: C++17
-- **框架**: Qt6 (Widgets + SerialPort + Network)
-- **GUI 编译**: CMake + MinGW (Windows) / NDK (Android)
-- **音频**: Qt6 Multimedia
-- **频谱**: QCustomPlot / Qt6 Charts
+```bash
+# Read frequency
+python -m rsba1.cli ic705 read-freq
 
-## 逆向成果
+# Read S-meter
+python -m rsba1.cli ic705 read-smeter
 
-### 已分析 DLL
+# Set frequency
+python -m rsba1.cli ic705 set-freq 7.074
 
-| DLL | 大小 | 导出 | 功能 |
-|-----|------|------|------|
-| HidCtrl.dll | 16KB | 10 | HID 传输层（重叠 I/O + 接收线程） |
-| CivCtrl.dll | 148KB | 18 | **CI-V 协议栈核心**（COM API 直连串口） |
-| UtyCtrl.dll | 200KB | 9 | 远程传输/状态/音频管理层 |
-| RS-BA1V2Ck.dll | 1.9MB | 1 | 许可证检查（含 GUI） |
+# Set mode
+python -m rsba1.cli ic705 set-mode USB
 
-### RemoteCtrl.exe 主程序
+# PTT on/off
+python -m rsba1.cli ic705 ptt tx
+python -m rsba1.cli ic705 ptt rx
+```
 
-| 项目 | 值 |
-|------|------|
-| 大小 | 42.9 MB |
-| 语言 | Borland Delphi（VCL 框架） |
-| 单元 | 48 个功能模块 |
-| 资源 | 930 张 BMP（38 MB）, 46 个 Delphi 表单 |
-| 音效 | 6 个 WAV（BEEP_ERR/OK/STBY/WC/EXIT） |
+### MCP Server
 
-### IC-705 CI-V 参数
+Start the MCP server for AI agent integration:
 
-| 参数 | 值 |
-|------|-----|
-| CI-V 地址 | **0xA4** |
-| 控制器地址 | **0xE0** |
-| 默认波特率 | 19200（遥控）/ 115200（远程工具） |
-| 帧格式 | `FE FE TO FR DATA FD` |
-| 频率编码 | 5 字节 BCD |
+```bash
+# Stdio mode (default, for MCP clients)
+python -m rsba1.mcp
 
-详见 `phase3-protocol/ci-v-spec.md`
+# HTTP SSE mode
+python -m rsba1.mcp --transport sse --port 8765
+```
 
-## 许可
+Available tools: `ic705_read_freq`, `ic705_read_mode`, `ic705_read_smeter`, `ic705_set_freq`, `ic705_ptt`, `ic705_get_status`
 
-研究目的。RS-BA1 版权归 Icom Inc. 所有。
+## Architecture
+
+```
+Your App / AI Agent
+        ↓
+FastMCP Server (rsba1.mcp)
+        ↓
+Python Protocol Stack (rsba1.*)
+        ↓
+RadioLink (Windows) ← USB → IC-705
+   or
+Direct Serial / Network
+```
+
+See [docs/MCP_CLIENT.md](docs/MCP_CLIENT.md) for MCP integration guide.
+
+## Hardware Requirements
+
+- **IC-705** (primary target, tested)
+- **IC-9700** (compatible, same CI-V protocol)
+- Other Icom CI-V radios (IC-7300, IC-7610, etc.) — may work with minor adjustments
+
+Connection modes:
+1. **USB direct** (recommended for local control): RadioLink CI-V USB cable
+2. **Network remote**: RS-BA1 server running on Windows PC connected to radio
+
+## Documentation
+
+- [Reverse Engineering Plan](docs/REVERSE_PLAN.md) — full protocol analysis
+- [Progress Tracker](docs/进度.md) — detailed implementation status (Chinese)
+- [MCP Client Guide](docs/MCP_CLIENT.md) — AI agent integration
+- [Live E2E Verification](docs/live_e2e_verification.md) — hardware testing guide
+
+## Testing
+
+```bash
+# Run all tests (193 cases)
+python -m pytest tests/ -v
+
+# Mock tests only (no hardware)
+python -m pytest tests/ -v -k "mock"
+
+# E2E test (requires IC-705 connected)
+python scripts/e2e_civ_loop.py
+```
+
+## Limitations
+
+- Audio streaming (UDP 50003) not yet implemented
+- Remote mode requires RadioLink on Windows (pure Python remote implementation is future work)
+- CI-V over Bluetooth not tested
+
+## Contributing
+
+Issues and PRs welcome. Please see [docs/REVERSE_PLAN.md](docs/REVERSE_PLAN.md) for the reverse engineering methodology if you want to extend support to additional radios or features.
+
+## Disclaimer
+
+This project is for **educational and research purposes only**. RS-BA1 and related software are proprietary products of Icom Inc. This project is not affiliated with, endorsed by, or connected to Icom Inc. in any way.
+
+The reverse engineering was performed on locally-installed software for the purpose of understanding interoperability and creating open-source tooling for amateur radio operators. Users are responsible for complying with applicable laws and Icom's license terms.
+
+## License
+
+MIT License — see [LICENSE](LICENSE).
