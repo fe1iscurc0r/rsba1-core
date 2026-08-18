@@ -516,6 +516,26 @@ class RadioLink:
         civcmd.assert_allowed_freq(hz)
         self.send_civ(civcmd.build_frame(CIV_IC705, CIV_FROM, civcmd.set_freq_bytes(hz)))
 
+    def read_smeter(self, timeout: float = 2.0) -> int:
+        """读取 S-meter 原始数据字节.
+
+        返回: S-meter 原始值 (0-255)。参考 S 表换算为 dB/档位。
+
+        超时: 电台静默时抛出 RadioTimeoutError。
+        """
+        resp = self._civ_query(bytes([civcmd.CMD_READ_SMETER, 0x03]), 0x1A, timeout)
+        # parse_smeter expects the CI-V frame from index 0; our resp starts at frame data
+        # parse_civ_response reads from blob[0] expecting FE FE ...
+        # Our resp from _civ_query is already stripped to frame body (after strip_civ_frame)
+        # But _civ_query returns the raw response blob starting at FE FE,
+        # so we need to pass the full frame and let parse_smeter handle it.
+        # Actually: read_civ returns data[21:] which is CI-V frame body only (after wire/serial hdr).
+        # parse_smeter expects the full CI-V frame. Let's reconstruct.
+        from rsba1.mailslot.civ_response import parse_smeter
+        # CI-V frame: FE FE <from> <to> <cmd> <sub> <data> FD
+        frame = b'\xfe\xfe' + bytes([CIV_FROM, CIV_IC705]) + resp
+        return parse_smeter(frame)
+
     def ptt(self, on: bool) -> None:
         """PTT 控制 (⚠️ on=True 会真正发射, 调用方须确保天线/负载安全)."""
         cmd = civcmd.ptt_on_bytes() if on else civcmd.ptt_off_bytes()

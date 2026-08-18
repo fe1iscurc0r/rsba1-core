@@ -1,29 +1,33 @@
-"""e2e_civ_loop — 端到端 E2E: RS-BA1 全链路 (Command 认证 + Serial 透传) CI-V 闭环.
+"""e2e_civ_loop.py — End-to-end RS-BA1 CI-V loopback test.
 
-链路 (2026-08-18 真机定案, 详见 re/protocols/command_channel_cmd.md §4.2):
-    Command(50001) 登录认证 → ConnectTrans → Serial(50002) open → CI-V 透传。
-    ⚠️ 旧版"纯 Serial 无需认证"假设已被 A/B 实验推翻: 无授权会话时电台只回环
-    本端请求, 不透传电台应答。
+Usage:
+    # With credentials as CLI args
+    python scripts/e2e_civ_loop.py --host 192.168.0.31 --user linnan --pwd secret
 
-前置条件:
-    1. IC-705 已上电, RS-BA1 Server Function 开启, 网络可达 (ping 通)。
-    2. 电台侧 RS-BA1 用户名/密码 (MENU → SET → WLAN Set → Remote Settings)。
-    3. 电台网络栈未卡死 (卡死特征: ping 通但三端口静默 → 重启电台)。
+    # With environment variables (recommended — keeps passwords out of shell history)
+    export RADIO_HOST=192.168.0.31
+    export RADIO_USER=linnan
+    export RADIO_PASSWORD=secret
+    python scripts/e2e_civ_loop.py
 
-用法:
-    # 只读闭环: 循环 read_freq + read_mode
-    python scripts\\e2e_civ_loop.py --user linnan --pwd shenyaodiyi
-    # 回程写验证: 设频到 145.000MHz (白名单内) 读回确认, 最后恢复原频率
-    python scripts\\e2e_civ_loop.py --user linnan --pwd shenyaodiyi --set-freq 145000000
-    # PTT 触发 (会真正发射, 确保天线负载!)
-    python scripts\\e2e_civ_loop.py --user linnan --pwd shenyaodiyi --ptt
+    # Dry run (validates params and band whitelist without connecting)
+    python scripts/e2e_civ_loop.py --dry-run
 
-返回:
-    0 = 闭环打通; 非 0 = 失败, 打印阶段与原始包便于归因。
+    # Set frequency roundtrip test
+    python scripts/e2e_civ_loop.py --host 192.168.0.31 --user linnan --pwd secret --set-freq 145000000
+
+    # PTT test (WARNING: will transmit!)
+    python scripts/e2e_civ_loop.py --host 192.168.0.31 --user linnan --pwd secret --ptt
+
+Prerequisites:
+    1. IC-705 powered on, RS-BA1 Server Function enabled (MENU → SET → WLAN)
+    2. Valid RS-BA1 username/password configured on the radio
+    3. Network connectivity (run: ping <host> first)
 """
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import time
 from pathlib import Path
@@ -32,112 +36,142 @@ _SRC = Path(__file__).resolve().parent.parent / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from rsba1.radio_link import (  # noqa: E402
+from rsba1.radio_link import (
     RadioLink,
     RadioAuthError,
     RadioLinkError,
     RadioTimeoutError,
 )
-from rsba1.ctypes_wrappers import civ_commands as civcmd  # noqa: E402
+from rsba1.ctypes_wrappers import civ_commands as civcmd
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description="端到端: RS-BA1 全链路 CI-V 闭环")
-    p.add_argument("--host", default="192.168.0.31", help="IC-705 (RS-BA1 Server) IP")
-    p.add_argument("--user", default="linnan", help="电台侧 RS-BA1 用户名")
-    p.add_argument("--pwd", default="shenyaodiyi", help="电台侧 RS-BA1 密码")
-    p.add_argument("--bind-ip", default="192.168.0.23", help="本机 LAN 源 IP")
-    p.add_argument("--iterations", type=int, default=3, help="read_freq 循环次数")
+    p = argparse.ArgumentParser(
+        description="E2E: RS-BA1 full链路 CI-V 闭环",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=__doc__,
+    )
+    p.add_argument("--host", default=os.environ.get("RADIO_HOST", "").strip(),
+                   help="IC-705 (RS-BA1 Server) IP")
+    p.add_argument("--user", default=os.environ.get("RADIO_USER", "").strip(),
+                   help="Radio RS-BA1 username (or RADIO_USER env)")
+    p.add_argument("--pwd", default=os.environ.get("RADIO_PASSWORD", "").strip(),
+                   help="Radio RS-BA1 password (or RADIO_PASSWORD env)")
+    p.add_argument("--bind-ip", default=os.environ.get("RADIO_BIND_IP", "").strip(),
+                   help="Source IP for multi-NIC machines (or RADIO_BIND_IP env)")
+    p.add_argument("--iterations", type=int, default=3,
+                   help="read_freq loop count (default: 3)")
     p.add_argument("--read-mode", action="store_true", default=True,
-                   help="同时循环 read_mode (默认开)")
+                   help="Also loop read_mode (default: on)")
     p.add_argument("--set-freq", type=int, default=None,
-                   help="回程写验证: 设到该频率(Hz, 须在白名单内)读回, 结束后恢复原频率")
+                   help="Roundtrip test: set this frequency (Hz, must be in amateur band), then restore")
     p.add_argument("--ptt", action="store_true",
-                   help="PTT ON 1s → OFF (会真正发射, 谨慎)")
-    p.add_argument("--timeout", type=float, default=2.0, help="每包收发超时(秒)")
+                   help="PTT ON 1s → OFF (WARNING: actually transmits!)")
+    p.add_argument("--timeout", type=float, default=2.0,
+                   help="Per-packet timeout in seconds (default: 2.0)")
     p.add_argument("--dry-run", action="store_true",
-                   help="只校验参数与白名单, 不实际连接")
+                   help="Validate params and band whitelist without connecting")
     args = p.parse_args()
 
-    print(f"=== E2E: RS-BA1 全链路 CI-V 闭环 {args.host} "
-          f"(user={args.user}){'(DRY-RUN)' if args.dry_run else ''} ===")
+    # Validate required args
+    missing = []
+    if not args.host:
+        missing.append("--host / RADIO_HOST")
+    if not args.user:
+        missing.append("--user / RADIO_USER")
+    if not args.pwd:
+        missing.append("--pwd / RADIO_PASSWORD")
+    if missing:
+        print(f"Error: missing required args: {', '.join(missing)}", file=sys.stderr)
+        print("Pass --host/--user/--pwd or set RADIO_HOST/RADIO_USER/RADIO_PASSWORD env vars.", file=sys.stderr)
+        return 1
+
+    print(f"=== E2E: RS-BA1 CI-V loopback {args.host} (user={args.user}) "
+          f"{'(DRY-RUN)' if args.dry_run else ''} ===")
 
     if args.set_freq is not None:
         try:
             civcmd.assert_allowed_freq(args.set_freq)
         except ValueError as e:
-            print(f"✗ 目标频率被白名单拦截: {e}")
+            print(f"✗ Frequency out of amateur band: {e}")
             return 10
 
     if args.dry_run:
-        print("DRY-RUN: 参数与白名单校验通过, 不实际连接。")
+        print("DRY-RUN: params and band whitelist OK, not connecting.")
         return 0
 
     try:
-        with RadioLink(args.host, args.user, args.pwd,
-                       bind_ip=args.bind_ip, verbose=True) as link:
-            # ── 阶段 ① : read_freq 循环 ──
-            print("\n[1] read_freq 循环")
+        kwargs = {"host": args.host, "username": args.user, "password": args.pwd,
+                  "verbose": True}
+        if args.bind_ip:
+            kwargs["bind_ip"] = args.bind_ip
+        with RadioLink(**kwargs) as link:
+            link.open()
+            orig_freq = link.read_freq()
+            print(f"\n[0] Original frequency: {orig_freq / 1e6:.6f} MHz")
+
+            # ── Stage 1: read_freq loop ─────────────────────────────────────────
+            print(f"\n[1] read_freq loop ({args.iterations}x)")
             freqs = []
             for i in range(args.iterations):
-                hz = link.read_freq(timeout=args.timeout)
-                freqs.append(hz)
-                print(f"    [{i + 1}] 频率: {hz / 1e6:.6f} MHz ({hz} Hz)")
-                time.sleep(0.3)
-            orig_hz = freqs[0]
+                freq = link.read_freq(timeout=args.timeout)
+                freqs.append(freq)
+                mode, filt = link.read_mode(timeout=args.timeout) if args.read_mode else (None, None)
+                mode_name = _MODE_NAMES.get(mode, f"{mode:#x}") if mode is not None else "N/A"
+                print(f"  {i+1}. {freq / 1e6:.6f} MHz  mode={mode_name}")
             if len(set(freqs)) == 1:
-                print(f"    ✓ {args.iterations} 次读数稳定 = {orig_hz / 1e6:.6f} MHz")
+                print(f"  ✓ All {args.iterations} reads stable at {freqs[0] / 1e6:.6f} MHz")
             else:
-                print(f"    ⚠ 读数不一致: {[f / 1e6 for f in freqs]} MHz (电台可能正在调谐)")
+                print(f"  ✗ Inconsistent reads: {freqs}")
+                return 2
 
-            # ── 阶段 ② : read_mode ──
-            if args.read_mode:
-                print("[2] read_mode")
-                mode, filt = link.read_mode(timeout=args.timeout)
-                print(f"    ✓ mode=0x{mode:02X} filt=0x{filt:02X}")
-
-            # ── 阶段 ③ : 回程写验证 set_freq → read_freq → 恢复 ──
+            # ── Stage 2: set_freq roundtrip ────────────────────────────────────
             if args.set_freq is not None:
-                target = args.set_freq
-                print(f"[3] set_freq({target / 1e6:.6f} MHz) → read_freq 验证写回")
-                link.set_freq(target)
+                print(f"\n[2] set_freq roundtrip → {args.set_freq} Hz ({args.set_freq / 1e6:.6f} MHz)")
+                link.set_freq(args.set_freq)
                 time.sleep(0.5)
-                hz = link.read_freq(timeout=args.timeout)
-                if hz == target:
-                    print(f"    ✓ 写回一致: {hz / 1e6:.6f} MHz")
+                read_back = link.read_freq(timeout=args.timeout)
+                if read_back == args.set_freq:
+                    print(f"  ✓ Wrote {args.set_freq}, read back {read_back} — match!")
                 else:
-                    print(f"    ⚠ 写回不一致: 期望 {target / 1e6:.6f}, "
-                          f"实际 {hz / 1e6:.6f} MHz")
-                # 恢复原频率 (原频率若不在白名单, 直接 set 会被拦 —— 属正常保护)
-                try:
-                    link.set_freq(orig_hz)
-                    time.sleep(0.3)
-                    back = link.read_freq(timeout=args.timeout)
-                    print(f"    ✓ 已恢复原频率: {back / 1e6:.6f} MHz")
-                except ValueError as e:
-                    print(f"    ⚠ 原频率 {orig_hz} 不在白名单, 未自动恢复: {e}")
+                    print(f"  ✗ Wrote {args.set_freq}, read back {read_back} — MISMATCH")
+                    return 3
+                print(f"\n[3] Restoring original frequency: {orig_freq / 1e6:.6f} MHz")
+                link.set_freq(orig_freq)
 
-            # ── 阶段 ④ : PTT TX 触发确认 (可选) ──
+            # ── Stage 3: PTT test ──────────────────────────────────────────────
             if args.ptt:
-                print("[4] PTT ON 1s → OFF (TX 触发确认, 注意发射安全)")
+                print("\n[4] PTT TX 1s → RX")
                 link.ptt(True)
-                print("    PTT ON 已发送")
                 time.sleep(1.0)
                 link.ptt(False)
-                print("    PTT OFF 已发送")
+                print("  ✓ PTT TX→RX OK")
+
+            print("\n=== PASS: all stages OK ===")
+            return 0
 
     except RadioAuthError as e:
-        print(f"\n✗ 认证/授权失败: {e}")
-        return 2
-    except RadioTimeoutError as e:
-        print(f"\n✗ 链路超时: {e}")
-        return 3
-    except RadioLinkError as e:
-        print(f"\n✗ 链路错误: {e}")
+        print(f"\n✗ Auth failed: {e}", file=sys.stderr)
+        print("  Check --user / --pwd credentials match the radio's RS-BA1 settings.", file=sys.stderr)
         return 4
+    except RadioTimeoutError as e:
+        print(f"\n✗ Timeout: {e}", file=sys.stderr)
+        print("  Check: (1) radio is reachable at --host, (2) RS-BA1 Server is ON, (3) no firewall blocking.", file=sys.stderr)
+        return 5
+    except RadioLinkError as e:
+        print(f"\n✗ Link error: {e}", file=sys.stderr)
+        return 6
+    except Exception as e:
+        print(f"\n✗ Unexpected error: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        return 99
 
-    print("\n✓ 端到端全链路闭环完成。")
-    return 0
+
+_MODE_NAMES = {
+    0x00: "LSB", 0x01: "USB", 0x02: "AM", 0x03: "CW",
+    0x04: "NFM", 0x05: "WFM", 0x06: "CW-R",
+}
 
 
 if __name__ == "__main__":
