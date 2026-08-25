@@ -229,26 +229,37 @@ class RadioLink:
         username: 电台侧 RS-BA1 用户名 (菜单 WLAN Set → Remote Settings)
         password: 电台侧 RS-BA1 密码
         bind_ip:  本机 LAN IP (localSID 由它派生)
+        audio:    True=会话期间同时开启并维活 Audio(50003) 信道, 退出时正确拆除
+                  (kappanhang 完整模式 —— ConnectTrans 一次性分配 serial+audio,
+                  音频流被分配却从不建立/拆除会把电台 MOD 输入挂死在 WLAN 网络流上,
+                  造成"能 PTT 但声音进不去, 初始化电台才恢复");
+                  False=ConnectTrans 音频端口填 0, 不申请音频流 (实验性,
+                  电台固件可能拒绝, 视真机表现选用)。
         verbose:  打印各阶段日志
     """
 
     def __init__(self, host: str, username: str, password: str, *,
-                 bind_ip: str = "", verbose: bool = True):
+                 bind_ip: str = "", audio: bool = True, verbose: bool = True):
         self.host = host
         self.username = username
         self.password = password
         self.bind_ip = bind_ip
+        self.audio = audio
         self.verbose = verbose
         self._reset_chans()
         self._opened = False
 
     def _reset_chans(self) -> None:
-        """(重)建双信道与全部会话状态 (open 重试时复用)."""
+        """(重)建信道与全部会话状态 (open 重试时复用)."""
         self.ctrl = _Chan(self.host, 50001, self.bind_ip, "control", self.verbose)
         self.ser = _Chan(self.host, 50002, self.bind_ip, "serial", self.verbose)
+        self.aud: Optional[_Chan] = (
+            _Chan(self.host, 50003, self.bind_ip, "audio", self.verbose)
+            if self.audio else None)
         self.auth_id: Optional[bytes] = None
         self._sseq = 0                       # Serial 层 BE 序号
         self._serial_opened = False          # serial open(magic=0x05) 是否已发
+        self._audio_opened = False           # audio 握手是否已完成
         self._reauth_stop = threading.Event()
         self._reauth_thread: Optional[threading.Thread] = None
 
@@ -271,6 +282,10 @@ class RadioLink:
                 if not self.ser.handshake():
                     raise RadioTimeoutError("serial 信道握手失败 (无 pkt4)")
                 self._serial_open()
+                if self.aud is not None:      # 音频信道: 握手 + pkt7 维活
+                    if not self.aud.handshake():
+                        raise RadioTimeoutError("audio 信道握手失败 (无 pkt4)")
+                    self._audio_opened = True
                 time.sleep(0.3)   # open 后稍候, 电台透传闸门就绪
                 self._start_reauth()
                 self._opened = True
@@ -286,14 +301,16 @@ class RadioLink:
         raise last_err if last_err else RadioLinkError("建链失败")
 
     def close(self) -> None:
-        """优雅退出: serial close → deauth → disconnect → 关 socket.
+        """优雅退出: serial close → audio disconnect → deauth → disconnect → 关 socket.
 
-        四件套缺一不可 (kappanhang deinit 复刻):
+        五件套缺一不可 (kappanhang deinit 复刻):
           ① serial close 帧 (magic=0x00) — 漏发会让电台认为 serial/audio 流仍被
              占用, 下一次 ConnectTrans 直接被拒 (80B ff ff ff, 需重启电台);
-          ② control deauth (auth magic=0x01);
-          ③ 两信道传输层 disconnect (type=0x05);
-          ④ 关 socket。
+          ② audio 信道 disconnect (开启过才发) — 漏拆会把电台 MOD 输入挂死在
+             WLAN 网络流上 (能 PTT 但声音进不去);
+          ③ control deauth (auth magic=0x01);
+          ④ 各信道传输层 disconnect (type=0x05);
+          ⑤ 关 socket。
         """
         self._reauth_stop.set()
         if self._reauth_thread is not None:
@@ -312,7 +329,10 @@ class RadioLink:
             except OSError:
                 pass
             self._serial_opened = False
-        if self.auth_id is not None:  # ② control deauth
+        chans = [self.ser, self.ctrl]
+        if self.aud is not None:
+            chans.insert(0, self.aud)   # ② audio 先拆 (⑤ 一并关 socket)
+        if self.auth_id is not None:  # ③ control deauth
             try:
                 pkt = cc.build_auth_request(
                     0x01, local_sid=self.ctrl.local_sid,
@@ -326,7 +346,7 @@ class RadioLink:
             except OSError:
                 pass
             self.auth_id = None
-        for chan in (self.ser, self.ctrl):  # ③④ disconnect + close
+        for chan in chans:  # ④⑤ disconnect + close
             try:
                 if chan.remote_sid:
                     chan.send(cc.build_disconnect_pkt(
@@ -334,6 +354,7 @@ class RadioLink:
             except OSError:
                 pass
             chan.close()
+        self._audio_opened = False
         self._opened = False
 
     def __enter__(self) -> "RadioLink":
@@ -397,7 +418,8 @@ class RadioLink:
             self.username,
             local_sid=self.ctrl.local_sid, remote_sid=self.ctrl.remote_sid,
             outer_seq=self.ctrl.tx_seq, inner_seq=3,
-            auth_id=auth_id, a8_reply_id=a8_id)
+            auth_id=auth_id, a8_reply_id=a8_id,
+            audio_port=50003 if self.audio else 0)
         if self.verbose:
             _log("control", f"→ ConnectTrans ({len(ct)}B)")
         self.ctrl.drain("ConnectTrans 前清场")
@@ -466,8 +488,8 @@ class RadioLink:
             self.ser.local_sid, self.ser.remote_sid) + frame
         self.ser.send_data(pkt)
 
-    def read_civ(self, cmd: int, timeout: float = 2.0) -> bytes:
-        """等待来自电台 (from=0xA4) 且 cmd 字节匹配的 CI-V 帧.
+    def read_civ(self, cmd: int, timeout: float = 2.0, sub: bytes = b"") -> bytes:
+        """等待来自电台 (from=0xA4) 且 cmd (+可选 sub 前缀) 匹配的 CI-V 帧.
 
         自动跳过: 本端请求回环 (to=0xA4) / 其他 cmd 的异步帧 (保留在 stash)。
         """
@@ -475,8 +497,10 @@ class RadioLink:
             if len(d) < 22 or d[16] != 0xC1 or d[0] - 0x15 != d[17]:
                 return False
             p = d[21:]
-            return (len(p) >= 6 and p[0] == 0xFE and p[1] == 0xFE
-                    and p[2] == CIV_FROM and p[3] == CIV_IC705 and p[4] == cmd)
+            if not (len(p) >= 6 and p[0] == 0xFE and p[1] == 0xFE
+                    and p[2] == CIV_FROM and p[3] == CIV_IC705 and p[4] == cmd):
+                return False
+            return p[5:5 + len(sub)] == sub
         data = self.ser.wait_for(_match, timeout, f"等CI-V cmd=0x{cmd:02X}")
         if data is None:
             raise RadioTimeoutError(f"等 CI-V 应答超时 (cmd=0x{cmd:02X})")
@@ -484,20 +508,25 @@ class RadioLink:
 
     # ---------------- 高层 CI-V 业务 ----------------
 
-    def _civ_query(self, cmd_bytes: bytes, resp_cmd: int, timeout: float) -> bytes:
+    def _civ_query(self, cmd_bytes: bytes, resp_cmd: int, timeout: float,
+                   resp_sub: bytes = b"") -> bytes:
         """发一帧查询并等应答; 超时重发一次 (电台偶发丢首包, kappanhang 靠重传
         请求兜底, 此处简化为应用层重发一次)."""
         civ = civcmd.build_frame(CIV_IC705, CIV_FROM, cmd_bytes)
         for attempt in range(2):
             self.send_civ(civ)
             try:
-                return self.read_civ(resp_cmd, timeout)
+                return self.read_civ(resp_cmd, timeout, sub=resp_sub)
             except RadioTimeoutError:
                 if attempt == 1:
                     raise
                 if self.verbose:
                     _log("serial", f"(cmd=0x{resp_cmd:02X} 超时, 重发一次)")
         raise RadioTimeoutError(f"cmd=0x{resp_cmd:02X} 无应答")
+
+    def _civ_set(self, cmd_bytes: bytes) -> None:
+        """发一帧设置命令 (CI-V 写命令电台无 ACK, 需要确认请读回复核)."""
+        self.send_civ(civcmd.build_frame(CIV_IC705, CIV_FROM, cmd_bytes))
 
     def read_freq(self, timeout: float = 2.0) -> int:
         """读当前 VFO 频率, 返回 Hz."""
@@ -511,35 +540,442 @@ class RadioLink:
             raise RadioLinkError(f"read_mode 应答过短: {resp.hex()}")
         return resp[5], resp[6]
 
+    def set_mode(self, mode: int, filt: int = 0x01) -> None:
+        """设工作模式 (0x06) + 滤波器 (可选, 默认 FIL1).
+        mode: 0x00=LSB 0x01=USB 0x02=AM 0x03=CW 0x04=RTTY 0x05=FM 0x06=WFM
+              0x07=CW-R 0x08=RTTY-R 0x17=DV.
+        注意: 切换模式后部分功能(ATT/PAMP/AGC/IF滤波)的可用性会变化."""
+        self._civ_set(bytes([0x06, mode, filt]))
+
     def set_freq(self, hz: int) -> None:
         """设置 VFO 频率 (业余段白名单强制; 写命令电台无 ACK, 用 read_freq 复核)."""
         civcmd.assert_allowed_freq(hz)
         self.send_civ(civcmd.build_frame(CIV_IC705, CIV_FROM, civcmd.set_freq_bytes(hz)))
 
-    def read_smeter(self, timeout: float = 2.0) -> int:
-        """读取 S-meter 原始数据字节.
-
-        返回: S-meter 原始值 (0-255)。参考 S 表换算为 dB/档位。
-
-        超时: 电台静默时抛出 RadioTimeoutError。
-        """
-        resp = self._civ_query(bytes([civcmd.CMD_READ_SMETER, 0x03]), 0x1A, timeout)
-        # parse_smeter expects the CI-V frame from index 0; our resp starts at frame data
-        # parse_civ_response reads from blob[0] expecting FE FE ...
-        # Our resp from _civ_query is already stripped to frame body (after strip_civ_frame)
-        # But _civ_query returns the raw response blob starting at FE FE,
-        # so we need to pass the full frame and let parse_smeter handle it.
-        # Actually: read_civ returns data[21:] which is CI-V frame body only (after wire/serial hdr).
-        # parse_smeter expects the full CI-V frame. Let's reconstruct.
-        from rsba1.mailslot.civ_response import parse_smeter
-        # CI-V frame: FE FE <from> <to> <cmd> <sub> <data> FD
-        frame = b'\xfe\xfe' + bytes([CIV_FROM, CIV_IC705]) + resp
-        return parse_smeter(frame)
-
     def ptt(self, on: bool) -> None:
         """PTT 控制 (⚠️ on=True 会真正发射, 调用方须确保天线/负载安全)."""
         cmd = civcmd.ptt_on_bytes() if on else civcmd.ptt_off_bytes()
         self.send_civ(civcmd.build_frame(CIV_IC705, CIV_FROM, cmd))
+
+    # ---------------- 亚音 (CTCSS) ----------------
+    # 官方 IC-705 CI-V 参考 (p.21 格式图, 真机 2026-08-22 验证):
+    #   0x16 0x5D 亚音功能模式 / 0x1B 0x00 中继亚音频率 / 0x1B 0x01 TSQL 频率
+    #   频率数据 = 3 字节: [0x00 固定][100Hz|10Hz][1Hz|0.1Hz]
+    #   88.5Hz → 00 08 85 (真机应答实测)
+
+    #: 亚音模式枚举 (0x16 0x5D)
+    TONE_MODES = {
+        "off": 0x00, "tone": 0x01, "tsql": 0x02, "dtcs": 0x03,
+        "dtcs_t": 0x06, "tone_t_dtcs_r": 0x07,
+        "dtcs_t_tsql_r": 0x08, "tone_t_tsql_r": 0x09,
+    }
+
+    @staticmethod
+    def _tone_freq_to_bcd(hz_x10: int) -> bytes:
+        """亚音频率 (0.1Hz 单位, 如 885=88.5Hz) → 2B BCD."""
+        if not (0 <= hz_x10 <= 9999):
+            raise ValueError(f"亚音频率超范围 (0~999.9Hz): {hz_x10}")
+        return bytes([((hz_x10 // 1000) << 4) | ((hz_x10 // 100) % 10),
+                      (((hz_x10 // 10) % 10) << 4) | (hz_x10 % 10)])
+
+    @staticmethod
+    def _tone_bcd_to_hz_x10(b: bytes) -> int:
+        return ((b[0] >> 4) * 1000 + (b[0] & 0x0F) * 100
+                + (b[1] >> 4) * 10 + (b[1] & 0x0F))
+
+    def set_tone_mode(self, mode, *, _retry: bool = True) -> None:
+        """设亚音功能模式: "off"/"tone"/"tsql"/"dtcs" 等 (0x16 0x5D)."""
+        val = self.TONE_MODES[mode] if isinstance(mode, str) else int(mode)
+        self._civ_set(bytes([0x16, 0x5D, val]))
+
+    def read_tone_mode(self, timeout: float = 2.0) -> int:
+        """读亚音功能模式 (0x16 0x5D) → 原始枚举值."""
+        resp = self._civ_query(bytes([0x16, 0x5D]), 0x16, timeout, resp_sub=b"\x5d")
+        return resp[6]
+
+    def set_tone_freq(self, hz_x10: int, *, tsql: bool = False) -> None:
+        """设亚音频率 (0.1Hz 单位; tsql=False 中继亚音 0x1B 0x00, True TSQL 0x1B 0x01).
+        数据 3 字节: 0x00 固定头 + 2B BCD."""
+        self._civ_set(bytes([0x1B, 0x01 if tsql else 0x00])
+                      + b"\x00" + self._tone_freq_to_bcd(hz_x10))
+
+    def read_tone_freq(self, timeout: float = 2.0, *, tsql: bool = False) -> int:
+        """读亚音频率 → 0.1Hz 单位 (如 885 = 88.5Hz)."""
+        sub = bytes([0x01 if tsql else 0x00])
+        resp = self._civ_query(bytes([0x1B]) + sub, 0x1B, timeout, resp_sub=sub)
+        # 3 字节数据: [0x00][100Hz|10Hz][1Hz|0.1Hz]
+        return self._tone_bcd_to_hz_x10(resp[7:9])
+
+    # ---------------- ATT / NB ----------------
+
+    def set_att(self, on: bool) -> None:
+        """ATT 衰减开关 (0x11: 0x00=OFF, 0x20=20dB; ⚠️ 仅 HF/50MHz 段可设,
+        VHF/UHF 段电台可能拒收)."""
+        self._civ_set(bytes([0x11, 0x20 if on else 0x00]))
+
+    def read_att(self, timeout: float = 2.0) -> int:
+        """读 ATT 状态 → 原始值 (0x00=OFF / 0x20=20dB)."""
+        resp = self._civ_query(bytes([0x11]), 0x11, timeout)
+        return resp[5]
+
+    def set_nb(self, on: bool) -> None:
+        """NB 噪声抑制开关 (0x16 0x22: 0x00=OFF, 0x01=ON)."""
+        self._civ_set(bytes([0x16, 0x22, 0x01 if on else 0x00]))
+
+    def read_nb(self, timeout: float = 2.0) -> bool:
+        """读 NB 状态 → True=ON."""
+        resp = self._civ_query(bytes([0x16, 0x22]), 0x16, timeout, resp_sub=b"\x22")
+        return resp[6] == 0x01
+
+    # ---------------- 频差 (DUP/offset) ----------------
+
+    #: 频差方向枚举 (0x0F)
+    DUPLEX_MODES = {"simplex": 0x10, "dup-": 0x11, "dup+": 0x12}
+
+    def set_duplex(self, mode) -> None:
+        """设频差方向: "simplex"/"dup-"/"dup+" (0x0F).
+
+        ⚠️ 影响发射频率 (=VFO±offset), 请确认目标中继/频段合规后再设。
+        """
+        val = self.DUPLEX_MODES[mode] if isinstance(mode, str) else int(mode)
+        self._civ_set(bytes([0x0F, val]))
+
+    def read_duplex(self, timeout: float = 2.0) -> int:
+        """读频差/split 状态 → 原始值.
+        ⚠️ 读写不归一 (官方命令表 + 真机 2026-08-24 实测):
+        写入枚举 0x10=simplex / 0x11=DUP- / 0x12=DUP+;
+        裸查询应答电台归一化后的当前状态: simplex 读回 0x00,
+        DUP- 读回 0x11, DUP+ 读回 0x12."""
+        resp = self._civ_query(bytes([0x0F]), 0x0F, timeout)
+        return resp[5]
+
+    @staticmethod
+    def _offset_to_bcd3(hz: int) -> bytes:
+        """频差偏移 Hz → 3B BCD (0x0D 格式, p.16 格式图, 真机 2026-08-22 验证):
+        b0=[1kHz|100Hz]  b1=[100kHz|10kHz]  b2=[0 固定|1MHz]
+        分辨率 100Hz; 600kHz → 00 60 00 (真机实测)."""
+        if hz % 100 != 0 or not (0 <= hz <= 9_999_900):
+            raise ValueError(f"偏移须为 100Hz 整数倍且 ≤ 9.9999MHz: {hz}")
+        return bytes([
+            (((hz // 1000) % 10) << 4) | ((hz // 100) % 10),
+            (((hz // 100000) % 10) << 4) | ((hz // 10000) % 10),
+            (hz // 1000000) % 10,
+        ])
+
+    @staticmethod
+    def _bcd3_to_offset(b: bytes) -> int:
+        return ((b[0] >> 4) * 1000 + (b[0] & 0x0F) * 100
+                + (b[1] >> 4) * 100000 + (b[1] & 0x0F) * 10000
+                + (b[2] & 0x0F) * 1000000)
+
+    def set_offset(self, hz: int) -> None:
+        """设频差偏移 (0x0D, 100Hz 整数倍; ⚠️ 影响发射频率)."""
+        self._civ_set(bytes([0x0D]) + self._offset_to_bcd3(hz))
+
+    def read_offset(self, timeout: float = 2.0) -> int:
+        """读频差偏移 (0x0C) → Hz."""
+        resp = self._civ_query(bytes([0x0C]), 0x0C, timeout)
+        return self._bcd3_to_offset(resp[5:8])
+
+    # ---------------- S 表 ----------------
+
+    def read_smeter(self, timeout: float = 2.0) -> int:
+        """读 S 表电平 (0x15 0x02) → 原始值 (0000=S0, 0120=S9, 0241=S9+60dB).
+        数据 2B BCD MSB-first (与 0x14 电平族同风格, 范围 0000~0255);
+        ⚠️ IC-705 在 S0 时只回 1 字节 0x00 (真机 2026-08-22 实测)."""
+        resp = self._civ_query(bytes([0x15, 0x02]), 0x15, timeout, resp_sub=b"\x02")
+        return self._bcd2_msb_to_int(resp[6:-1])
+
+    # ---------------- 0x14 电平族 (0000~0255, 2B BCD MSB-first) ----------------
+    # 真机 2026-08-24 实测: b0=[千位|百位] b1=[十位|个位] (MSB-first),
+    # 128 → 01 28 / 255 → 02 55 / 72 → 00 72。
+
+    @staticmethod
+    def _int_to_bcd2_msb(val: int) -> bytes:
+        if not (0 <= val <= 255):
+            raise ValueError(f"电平值超范围 (0~255): {val}")
+        return bytes([((val // 1000) % 10) << 4 | ((val // 100) % 10),
+                      ((val // 10) % 10) << 4 | (val % 10)])
+
+    @classmethod
+    def _bcd2_msb_to_int(cls, data: bytes) -> int:
+        val = (data[0] >> 4) * 1000 + (data[0] & 0x0F) * 100
+        if len(data) >= 2:
+            val += (data[1] >> 4) * 10 + (data[1] & 0x0F)
+        return val
+
+    def _read_level14(self, sub: int, timeout: float = 2.0) -> int:
+        resp = self._civ_query(bytes([0x14, sub]), 0x14, timeout,
+                               resp_sub=bytes([sub]))
+        return self._bcd2_msb_to_int(resp[6:-1])
+
+    def _set_level14(self, sub: int, val: int) -> None:
+        self._civ_set(bytes([0x14, sub]) + self._int_to_bcd2_msb(val))
+
+    def read_rf_power(self, timeout: float = 2.0) -> int:
+        """读发射功率电平 (0x14 0x0A) → 0~255."""
+        return self._read_level14(0x0A, timeout)
+
+    def set_rf_power(self, val: int) -> None:
+        """设发射功率电平 (0x14 0x0A, 0~255; ⚠️ 影响发射功率)."""
+        self._set_level14(0x0A, val)
+
+    def read_mic_gain(self, timeout: float = 2.0) -> int:
+        """读 MIC 增益 (0x14 0x0B) → 0~255."""
+        return self._read_level14(0x0B, timeout)
+
+    def set_mic_gain(self, val: int) -> None:
+        """设 MIC 增益 (0x14 0x0B, 0~255; ⚠️ 影响发射音频)."""
+        self._set_level14(0x0B, val)
+
+    def read_nr_level(self, timeout: float = 2.0) -> int:
+        """读 NR 降噪深度 (0x14 0x06) → 0~255."""
+        return self._read_level14(0x06, timeout)
+
+    def set_nr_level(self, val: int) -> None:
+        """设 NR 降噪深度 (0x14 0x06, 0~255)."""
+        self._set_level14(0x06, val)
+
+    def read_notch_pos(self, timeout: float = 2.0) -> int:
+        """读 Manual Notch 位置 (0x14 0x0D) → 0~255."""
+        return self._read_level14(0x0D, timeout)
+
+    def set_notch_pos(self, val: int) -> None:
+        """设 Manual Notch 位置 (0x14 0x0D, 0~255)."""
+        self._set_level14(0x0D, val)
+
+    def read_moni_gain(self, timeout: float = 2.0) -> int:
+        """读 MONI 监听音量 (0x14 0x15) → 0~255."""
+        return self._read_level14(0x15, timeout)
+
+    def set_moni_gain(self, val: int) -> None:
+        """设 MONI 监听音量 (0x14 0x15, 0~255)."""
+        self._set_level14(0x15, val)
+
+    def read_vox_gain(self, timeout: float = 2.0) -> int:
+        """读 VOX 增益 (0x14 0x16) → 0~255."""
+        return self._read_level14(0x16, timeout)
+
+    def set_vox_gain(self, val: int) -> None:
+        """设 VOX 增益 (0x14 0x16, 0~255)."""
+        self._set_level14(0x16, val)
+
+    # ---------------- 0x16 开关族扩展 ----------------
+
+    def _read_sw16(self, sub: int, timeout: float = 2.0) -> int:
+        resp = self._civ_query(bytes([0x16, sub]), 0x16, timeout,
+                               resp_sub=bytes([sub]))
+        return resp[6]
+
+    def _set_sw16(self, sub: int, val: int) -> None:
+        self._civ_set(bytes([0x16, sub, val]))
+
+    #: PAMP 前置放大枚举 (0x16 0x02)
+    PAMP_MODES = {"off": 0x00, "pamp1": 0x01, "pamp2": 0x02}
+    #: AGC 档位枚举 (0x16 0x12)
+    AGC_MODES = {"fast": 0x01, "mid": 0x02, "slow": 0x03}
+
+    def set_pamp(self, mode) -> None:
+        """设前置放大 (0x16 0x02): "off"/"pamp1"/"pamp2"."""
+        val = self.PAMP_MODES[mode] if isinstance(mode, str) else int(mode)
+        self._set_sw16(0x02, val)
+
+    def read_pamp(self, timeout: float = 2.0) -> int:
+        """读前置放大 (0x16 0x02) → 0x00=OFF/0x01=PAMP1/0x02=PAMP2."""
+        return self._read_sw16(0x02, timeout)
+
+    def set_agc(self, mode) -> None:
+        """设 AGC 档位 (0x16 0x12): "fast"/"mid"/"slow"."""
+        val = self.AGC_MODES[mode] if isinstance(mode, str) else int(mode)
+        self._set_sw16(0x12, val)
+
+    def read_agc(self, timeout: float = 2.0) -> int:
+        """读 AGC 档位 (0x16 0x12) → 0x01/0x02/0x03."""
+        return self._read_sw16(0x12, timeout)
+
+    def set_nr(self, on: bool) -> None:
+        """NR 降噪开关 (0x16 0x40)."""
+        self._set_sw16(0x40, 0x01 if on else 0x00)
+
+    def read_nr(self, timeout: float = 2.0) -> bool:
+        """读 NR 降噪开关 (0x16 0x40)."""
+        return self._read_sw16(0x40, timeout) == 0x01
+
+    def set_notch_auto(self, on: bool) -> None:
+        """Auto Notch 开关 (0x16 0x41)."""
+        self._set_sw16(0x41, 0x01 if on else 0x00)
+
+    def read_notch_auto(self, timeout: float = 2.0) -> bool:
+        """读 Auto Notch 开关 (0x16 0x41)."""
+        return self._read_sw16(0x41, timeout) == 0x01
+
+    def set_notch_manual(self, on: bool) -> None:
+        """Manual Notch 开关 (0x16 0x48)."""
+        self._set_sw16(0x48, 0x01 if on else 0x00)
+
+    def read_notch_manual(self, timeout: float = 2.0) -> bool:
+        """读 Manual Notch 开关 (0x16 0x48)."""
+        return self._read_sw16(0x48, timeout) == 0x01
+
+    def set_moni(self, on: bool) -> None:
+        """MONI 监听开关 (0x16 0x45)."""
+        self._set_sw16(0x45, 0x01 if on else 0x00)
+
+    def read_moni(self, timeout: float = 2.0) -> bool:
+        """读 MONI 监听开关 (0x16 0x45)."""
+        return self._read_sw16(0x45, timeout) == 0x01
+
+    def set_vox(self, on: bool) -> None:
+        """VOX 声控开关 (0x16 0x46)."""
+        self._set_sw16(0x46, 0x01 if on else 0x00)
+
+    def read_vox(self, timeout: float = 2.0) -> bool:
+        """读 VOX 声控开关 (0x16 0x46)."""
+        return self._read_sw16(0x46, timeout) == 0x01
+
+    # ---------------- 0x1C 族: TX 状态 / TUNER / XFC ----------------
+
+    def read_tx_status(self, timeout: float = 2.0) -> bool:
+        """读收发状态 (0x1C 0x00) → True=TX 发射中."""
+        resp = self._civ_query(bytes([0x1C, 0x00]), 0x1C, timeout,
+                               resp_sub=b"\x00")
+        return resp[6] == 0x01
+
+    def set_tuner(self, on: bool) -> None:
+        """天调开关 (0x1C 0x01: 0x00=OFF, 0x01=ON).
+        ⚠️ IC-705 无内置天调 (AH-705 为外置), 未接天调时电台不应答 (2026-08-24 实测)."""
+        self._civ_set(bytes([0x1C, 0x01, 0x01 if on else 0x00]))
+
+    def read_tuner(self, timeout: float = 2.0) -> int:
+        """读天调状态 (0x1C 0x01) → 0x00=OFF/0x01=ON/0x02=调谐中.
+        ⚠️ IC-705 无内置天调, 未接 AH-705 时查询超时 (2026-08-24 实测)."""
+        resp = self._civ_query(bytes([0x1C, 0x01]), 0x1C, timeout,
+                               resp_sub=b"\x01")
+        return resp[6]
+
+    def tune_now(self) -> None:
+        """触发天调调谐 (0x1C 0x01 data=0x02).
+        ⚠️ 会载波发射数秒! 调用方须确保天线/负载安全."""
+        self._civ_set(bytes([0x1C, 0x01, 0x02]))
+
+    def set_xfc(self, on: bool) -> None:
+        """XFC 发射频率监视开关 (0x1C 0x02)."""
+        self._civ_set(bytes([0x1C, 0x02, 0x01 if on else 0x00]))
+
+    def read_xfc(self, timeout: float = 2.0) -> bool:
+        """读 XFC 发射频率监视开关 (0x1C 0x02)."""
+        resp = self._civ_query(bytes([0x1C, 0x02]), 0x1C, timeout,
+                               resp_sub=b"\x02")
+        return resp[6] == 0x01
+
+    # ---------------- SPLIT (0x0F 00/01) ----------------
+
+    def set_split(self, on: bool) -> None:
+        """SPLIT 异频开关 (0x0F: 0x00=OFF, 0x01=ON).
+        ⚠️ 开启后发射频率=另一 VFO, 请确认合规."""
+        self._civ_set(bytes([0x0F, 0x01 if on else 0x00]))
+
+    # ---------------- RIT (0x21) ----------------
+    # 频率格式 (p.25 图): 3B = [10Hz|1Hz][1kHz|100Hz][符号 00=+/01=-], ≤±9.999kHz
+
+    def set_rit(self, on: bool) -> None:
+        """RIT 开关 (0x21 0x01)."""
+        self._civ_set(bytes([0x21, 0x01, 0x01 if on else 0x00]))
+
+    def read_rit(self, timeout: float = 2.0) -> bool:
+        """读 RIT 开关 (0x21 0x01)."""
+        resp = self._civ_query(bytes([0x21, 0x01]), 0x21, timeout,
+                               resp_sub=b"\x01")
+        return resp[6] == 0x01
+
+    def set_dtx(self, on: bool) -> None:
+        """∂TX 开关 (0x21 0x02)."""
+        self._civ_set(bytes([0x21, 0x02, 0x01 if on else 0x00]))
+
+    def read_dtx(self, timeout: float = 2.0) -> bool:
+        """读 ∂TX 开关 (0x21 0x02)."""
+        resp = self._civ_query(bytes([0x21, 0x02]), 0x21, timeout,
+                               resp_sub=b"\x02")
+        return resp[6] == 0x01
+
+    @staticmethod
+    def _rit_freq_to_bcd(hz: int) -> bytes:
+        """带符号 RIT 频率 Hz → 3B (p.25 格式)."""
+        if not (-9999 <= hz <= 9999):
+            raise ValueError(f"RIT 频率超范围 (±9999Hz): {hz}")
+        v = abs(hz)
+        return bytes([((v // 10) % 10) << 4 | (v % 10),
+                      ((v // 1000) % 10) << 4 | ((v // 100) % 10),
+                      0x01 if hz < 0 else 0x00])
+
+    @staticmethod
+    def _bcd_to_rit_freq(b: bytes) -> int:
+        v = ((b[0] >> 4) * 10 + (b[0] & 0x0F)
+             + (b[1] >> 4) * 1000 + (b[1] & 0x0F) * 100)
+        return -v if b[2] == 0x01 else v
+
+    def set_rit_freq(self, hz: int) -> None:
+        """设 RIT 频率 (0x21 0x00, ±9999Hz, 带符号)."""
+        self._civ_set(bytes([0x21, 0x00]) + self._rit_freq_to_bcd(hz))
+
+    def read_rit_freq(self, timeout: float = 2.0) -> int:
+        """读 RIT 频率 (0x21 0x00) → 带符号 Hz."""
+        resp = self._civ_query(bytes([0x21, 0x00]), 0x21, timeout,
+                               resp_sub=b"\x00")
+        return self._bcd_to_rit_freq(resp[6:9])
+
+    # ---------------- SCAN (0x0E) / SPEECH (0x13) ----------------
+
+    #: 扫描模式枚举 (0x0E)
+    SCAN_MODES = {
+        "programmed_mem": 0x01, "programmed": 0x02, "df": 0x03,
+        "fine_programmed": 0x12, "fine_df": 0x13,
+        "memory": 0x22, "select_memory": 0x23, "mode_select": 0x24,
+    }
+
+    def scan_start(self, mode="programmed") -> None:
+        """启动扫描 (0x0E; 模式见 SCAN_MODES). ⚠️ 电台会持续步进."""
+        val = self.SCAN_MODES[mode] if isinstance(mode, str) else int(mode)
+        self._civ_set(bytes([0x0E, val]))
+
+    def scan_stop(self) -> None:
+        """停止扫描 (0x0E 0x00)."""
+        self._civ_set(bytes([0x0E, 0x00]))
+
+    def speech(self, what="all") -> None:
+        """语音播报 (0x13): "all"=0x00 全播报 / "freq"=0x01 频率 / "mode"=0x02 模式.
+        电台会出声, 注意音量."""
+        code = {"all": 0x00, "freq": 0x01, "mode": 0x02}[what]
+        self._civ_set(bytes([0x13, code]))
+
+    # ---------------- TBW 滤波带宽 (0x1A 0x03) ----------------
+
+    def read_if_filter(self, timeout: float = 2.0) -> int:
+        """读 IF 滤波带宽索引 (0x1A 0x03) → 原始索引 (含义随模式而异, p.19 表).
+        ⚠️ FM 模式下电台不应答 (2026-08-24 实测); SSB/CW/RTTY/AM 模式可用."""
+        resp = self._civ_query(bytes([0x1A, 0x03]), 0x1A, timeout,
+                               resp_sub=b"\x03")
+        return resp[6]
+
+    def set_if_filter(self, idx: int) -> None:
+        """设 IF 滤波带宽索引 (0x1A 0x03; 范围随模式: SSB/CW 0~40, AM 0~49)."""
+        if not (0 <= idx <= 49):
+            raise ValueError(f"滤波带宽索引超范围 (0~49): {idx}")
+        self._civ_set(bytes([0x1A, 0x03, idx]))
+
+    # ---------------- MAX TX POWER (0x1A 05 0036) ----------------
+
+    def read_max_tx_power(self, timeout: float = 2.0) -> int:
+        """读最大发射功率档位 (0x1A 05 0036) → 0~3."""
+        resp = self._civ_query(bytes([0x1A, 0x05, 0x00, 0x36]), 0x1A, timeout,
+                               resp_sub=b"\x05\x00\x36")
+        return resp[8]
+
+    def set_max_tx_power(self, val: int) -> None:
+        """设最大发射功率档位 (0x1A 05 0036, 0~3; ⚠️ 影响发射上限)."""
+        if not (0 <= val <= 3):
+            raise ValueError(f"MAX TX POWER 档位超范围 (0~3): {val}")
+        self._civ_set(bytes([0x1A, 0x05, 0x00, 0x36, val]))
 
     def __repr__(self) -> str:
         return (f"<RadioLink {self.host} user={self.username!r} "
