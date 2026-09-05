@@ -8,7 +8,7 @@ This package provides:
 Quick start:
     import os
     os.environ["RADIO_HOST"] = "192.168.0.31"
-    os.environ["RADIO_USER"] = "linnan"
+    os.environ["RADIO_USER"] = "radio_user"
     os.environ["RADIO_PASSWORD"] = "secret"
 
     from rsba1.radio_link import RadioLink

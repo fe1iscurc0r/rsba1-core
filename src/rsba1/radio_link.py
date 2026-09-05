@@ -18,7 +18,7 @@
     其余进 inbox 队列; 业务线程只从 inbox 消费 (带 stash 回推, 等包不乱序)。
 
 用法:
-    with RadioLink("192.168.0.31", "linnan", "shenyaodiyi") as link:
+    with RadioLink("192.168.0.31", "radio_user", "change_me") as link:
         print(link.read_freq() / 1e6, "MHz")
         link.set_freq(145_000_000)   # 白名单内
         link.set_freq(orig_hz)       # 恢复

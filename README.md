@@ -18,7 +18,7 @@ Icom's RS-BA1 software runs on Windows only and is closed-source. This project r
 pip install rsba1-core
 
 export RADIO_HOST=192.168.0.31
-export RADIO_USER=linnan
+export RADIO_USER=radio_user
 export RADIO_PASSWORD=your_password
 
 python -m rsba1.mcp read-freq

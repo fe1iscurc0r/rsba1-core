@@ -14,11 +14,11 @@ Usage:
     python -m rsba1.mcp --transport sse --host 0.0.0.0 --port 8765
 
     # With credentials via CLI args (or env vars: RADIO_HOST, RADIO_USER, RADIO_PASSWORD)
-    python -m rsba1.mcp --host 192.168.0.31 --user linnan --pwd secret
+    python -m rsba1.mcp --host 192.168.0.31 --user radio_user --pwd secret
 
 Environment variables (recommended — avoids putting credentials in CLI history):
     RADIO_HOST=192.168.0.31
-    RADIO_USER=linnan
+    RADIO_USER=radio_user
     RADIO_PASSWORD=your_password
 
 For one-off commands without starting a server:

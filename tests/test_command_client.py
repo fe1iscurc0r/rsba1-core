@@ -361,7 +361,7 @@ class TestHandshakePackets(unittest.TestCase):
 class TestLoginPacket(unittest.TestCase):
     def setUp(self):
         self.pkt = build_login_request(
-            "linman", "shenyaodiyi",
+            "radio_user", "change_me",
             local_sid=SID_LOCAL, remote_sid=SID_REMOTE,
             outer_seq=1, inner_seq=0, auth_start_id=b"\x12\x34",
         )
@@ -385,8 +385,8 @@ class TestLoginPacket(unittest.TestCase):
     def test_payload_fields(self):
         # 凭证区绝对偏移 0x40/0x50/0x60 (内层基址 0x10 + 静态 buf+0x30/0x40/0x50)
         self.assertEqual(self.pkt[0x30:0x40], bytes(0x10))  # 内层头后保留区全 0
-        self.assertEqual(self.pkt[0x40:0x50], passcode("linman"))
-        self.assertEqual(self.pkt[0x50:0x60], passcode("shenyaodiyi"))
+        self.assertEqual(self.pkt[0x40:0x50], passcode("radio_user"))
+        self.assertEqual(self.pkt[0x50:0x60], passcode("change_me"))
         self.assertEqual(self.pkt[0x60:0x68], b"icom-pc\x00")
         self.assertEqual(self.pkt[0x68:], bytes(0x18))   # 尾部全 0
 
@@ -419,7 +419,7 @@ class TestAuthPacket(unittest.TestCase):
 class TestConnectTransPacket(unittest.TestCase):
     def setUp(self):
         self.pkt = build_connect_trans_request(
-            "linman", local_sid=SID_LOCAL, remote_sid=SID_REMOTE,
+            "radio_user", local_sid=SID_LOCAL, remote_sid=SID_REMOTE,
             outer_seq=4, inner_seq=3, auth_id=AUTH_ID,
             a8_reply_id=bytes(range(16)),
         )
@@ -433,7 +433,7 @@ class TestConnectTransPacket(unittest.TestCase):
     def test_payload(self):
         self.assertEqual(self.pkt[0x20:0x30], bytes(range(16)))  # a8replyID
         self.assertEqual(self.pkt[0x40:0x48], b"IC-705\x00\x00")
-        self.assertEqual(self.pkt[0x60:0x70], passcode("linman"))
+        self.assertEqual(self.pkt[0x60:0x70], passcode("radio_user"))
         self.assertEqual(self.pkt[0x70:0x74], b"\x01\x01\x04\x04")
         self.assertEqual(self.pkt[0x76:0x78], struct.pack(">H", 48000))
         self.assertEqual(self.pkt[0x7E:0x80], struct.pack(">H", 50002))

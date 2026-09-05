@@ -2,11 +2,11 @@
 
 Usage:
     # With credentials as CLI args
-    python scripts/e2e_civ_loop.py --host 192.168.0.31 --user linnan --pwd secret
+    python scripts/e2e_civ_loop.py --host 192.168.0.31 --user radio_user --pwd secret
 
     # With environment variables (recommended — keeps passwords out of shell history)
     export RADIO_HOST=192.168.0.31
-    export RADIO_USER=linnan
+    export RADIO_USER=radio_user
     export RADIO_PASSWORD=secret
     python scripts/e2e_civ_loop.py
 
@@ -14,10 +14,10 @@ Usage:
     python scripts/e2e_civ_loop.py --dry-run
 
     # Set frequency roundtrip test
-    python scripts/e2e_civ_loop.py --host 192.168.0.31 --user linnan --pwd secret --set-freq 145000000
+    python scripts/e2e_civ_loop.py --host 192.168.0.31 --user radio_user --pwd secret --set-freq 145000000
 
     # PTT test (WARNING: will transmit!)
-    python scripts/e2e_civ_loop.py --host 192.168.0.31 --user linnan --pwd secret --ptt
+    python scripts/e2e_civ_loop.py --host 192.168.0.31 --user radio_user --pwd secret --ptt
 
 Prerequisites:
     1. IC-705 powered on, RS-BA1 Server Function enabled (MENU → SET → WLAN)

@@ -17,7 +17,7 @@
 
 ```bash
 export RADIO_HOST=192.168.0.31
-export RADIO_USER=linnan
+export RADIO_USER=radio_user
 export RADIO_PASSWORD=你的密码
 
 # 单次读取频率

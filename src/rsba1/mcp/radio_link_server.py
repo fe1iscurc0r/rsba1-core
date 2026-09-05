@@ -65,12 +65,12 @@ def create_radio_link_server(
 
     Example (environment variables):
         export RADIO_HOST=192.168.0.31
-        export RADIO_USER=linnan
-        export RADIO_PASSWORD=shenyaodiyi
+        export RADIO_USER=radio_user
+        export RADIO_PASSWORD=change_me
         python -m rsba1.mcp
 
     Example (CLI args):
-        python -m rsba1.mcp --host 192.168.0.31 --user linnan --pwd shenyaodiyi
+        python -m rsba1.mcp --host 192.168.0.31 --user radio_user --pwd change_me
 
     Physical prerequisites:
         - IC-705 powered on, RS-BA1 Server Function enabled (MENU → SET → WLAN)
@@ -94,8 +94,8 @@ def create_radio_link_server(
     if not _user or not _pwd:
         raise ValueError(
             "Radio credentials not set. Pass --user/--pwd or set RADIO_USER/RADIO_PASSWORD.\n"
-            "  python -m rsba1.mcp --host 192.168.0.31 --user linnan --pwd secret\n"
-            "  export RADIO_USER=linnan; export RADIO_PASSWORD=secret"
+            "  python -m rsba1.mcp --host 192.168.0.31 --user radio_user --pwd secret\n"
+            "  export RADIO_USER=radio_user; export RADIO_PASSWORD=secret"
         )
 
     # Import lazily to avoid import errors when only installing deps
@@ -126,7 +126,7 @@ def create_radio_link_server(
     mcp = FastMCP(name)
 
     # ── read_freq ────────────────────────────────────────────────────────────
-    @mcp.tool()
+    @mcp.tool(annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
     def read_freq() -> int:
         """Read the radio's current VFO frequency in Hz.
 
@@ -144,7 +144,7 @@ def create_radio_link_server(
             raise TimeoutError(f"Radio not responding: {e}") from e
 
     # ── read_mode ───────────────────────────────────────────────────────────
-    @mcp.tool()
+    @mcp.tool(annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
     def read_mode() -> Dict[str, Any]:
         """Read the radio's current mode and filter.
 
@@ -166,7 +166,7 @@ def create_radio_link_server(
         }
 
     # ── read_smeter ─────────────────────────────────────────────────────────
-    @mcp.tool()
+    @mcp.tool(annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
     def read_smeter() -> int:
         """Read the radio's S-meter value.
 
@@ -180,7 +180,7 @@ def create_radio_link_server(
             raise TimeoutError(f"Radio not responding: {e}") from e
 
     # ── set_freq ─────────────────────────────────────────────────────────────
-    @mcp.tool()
+    @mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
     def set_freq(hz: int) -> Dict[str, Any]:
         """Set the radio VFO frequency in Hz.
 
@@ -210,7 +210,7 @@ def create_radio_link_server(
             return {"success": False, "error": f"Radio timeout: {e}", "freq_hz": None}
 
     # ── ptt ─────────────────────────────────────────────────────────────────
-    @mcp.tool()
+    @mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
     def ptt(state: str) -> Dict[str, str]:
         """Control PTT (push-to-talk / TX/RX).
 
@@ -231,7 +231,7 @@ def create_radio_link_server(
             return {"success": False, "state": None, "error": str(e)}
 
     # ── get_status ──────────────────────────────────────────────────────────
-    @mcp.tool()
+    @mcp.tool(annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
     def get_status() -> Dict[str, Any]:
         """Read all radio status in one call: frequency, mode, S-meter, and panel
         button/key states (PAMP, AGC, NB, NR, VOX, TONE, ATT, NOTCH, MONI, DUP,
@@ -282,7 +282,7 @@ def create_radio_link_server(
             "max_tx_power": _safe(link.read_max_tx_power),
         }    # ── Panel buttons / keys (write side) ────────────────────────────────────────────────
 
-    @mcp.tool()
+    @mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
     def set_mode(mode: str) -> Dict[str, Any]:
         """Set the operating mode.
 
@@ -302,7 +302,7 @@ def create_radio_link_server(
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    @mcp.tool()
+    @mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
     def set_pamp(mode: str) -> Dict[str, Any]:
         """Set preamp (P.AMP). mode: "off" | "pamp1" | "pamp2" ("on" = pamp1)."""
         _ensure_link()
@@ -312,7 +312,7 @@ def create_radio_link_server(
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    @mcp.tool()
+    @mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
     def set_agc(mode: str) -> Dict[str, Any]:
         """Set AGC time constant. mode: "fast" | "mid" | "slow"."""
         _ensure_link()
@@ -322,28 +322,28 @@ def create_radio_link_server(
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    @mcp.tool()
+    @mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
     def set_nb(on: bool) -> Dict[str, Any]:
         """Set noise blanker (NB) on/off."""
         _ensure_link()
         _link["instance"].set_nb(on)
         return {"success": True, "nb": on}
 
-    @mcp.tool()
+    @mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
     def set_nr(on: bool) -> Dict[str, Any]:
         """Set noise reduction (NR) on/off."""
         _ensure_link()
         _link["instance"].set_nr(on)
         return {"success": True, "nr": on}
 
-    @mcp.tool()
+    @mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
     def set_vox(on: bool) -> Dict[str, Any]:
         """Set VOX on/off."""
         _ensure_link()
         _link["instance"].set_vox(on)
         return {"success": True, "vox": on}
 
-    @mcp.tool()
+    @mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
     def set_tone_mode(mode: str) -> Dict[str, Any]:
         """Set tone mode: "off" | "tone" | "tsql" | "dtcs" | "dtcs_t" |
         "tone_t_dtcs_r" | "dtcs_t_tsql_r" | "tone_t_tsql_r"."""
@@ -354,7 +354,7 @@ def create_radio_link_server(
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    @mcp.tool()
+    @mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
     def set_tone_freq(tone_hz_x10: int, tsql: bool = False) -> Dict[str, Any]:
         """Set CTCSS tone frequency in 0.1 Hz units (e.g. 885 = 88.5 Hz).
 
@@ -367,14 +367,14 @@ def create_radio_link_server(
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    @mcp.tool()
+    @mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
     def set_att(on: bool) -> Dict[str, Any]:
         """Set 20 dB attenuator (ATT) on/off (HF/50 MHz only)."""
         _ensure_link()
         _link["instance"].set_att(on)
         return {"success": True, "att": on}
 
-    @mcp.tool()
+    @mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
     def set_notch(kind: str, on: bool) -> Dict[str, Any]:
         """Set notch filter on/off. kind: "auto" (auto notch, 0x16 0x41) or
         "manual" (manual notch, 0x16 0x48)."""
@@ -391,14 +391,14 @@ def create_radio_link_server(
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    @mcp.tool()
+    @mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
     def set_moni(on: bool) -> Dict[str, Any]:
         """Set monitor (MONI) on/off."""
         _ensure_link()
         _link["instance"].set_moni(on)
         return {"success": True, "moni": on}
 
-    @mcp.tool()
+    @mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
     def set_duplex(mode: str) -> Dict[str, Any]:
         """Set duplex direction: "simplex" | "dup-" | "dup+"."""
         _ensure_link()
@@ -408,21 +408,21 @@ def create_radio_link_server(
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    @mcp.tool()
+    @mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
     def set_split(on: bool) -> Dict[str, Any]:
         """Set SPLIT (dual-VFO transmit) on/off. When on, TX uses the other VFO."""
         _ensure_link()
         _link["instance"].set_split(on)
         return {"success": True, "split": on}
 
-    @mcp.tool()
+    @mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
     def set_tuner(on: bool) -> Dict[str, Any]:
         """Set antenna tuner on/off (IC-705 needs external AH-705)."""
         _ensure_link()
         _link["instance"].set_tuner(on)
         return {"success": True, "tuner": on}
 
-    @mcp.tool()
+    @mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True})
     def tune_now() -> Dict[str, Any]:
         """Trigger antenna tuner tuning cycle. WARNING: transmits a carrier for
         a few seconds - ensure an antenna/load is connected."""
@@ -430,21 +430,21 @@ def create_radio_link_server(
         _link["instance"].tune_now()
         return {"success": True, "tune": "started"}
 
-    @mcp.tool()
+    @mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
     def set_xfc(on: bool) -> Dict[str, Any]:
         """Set transmit-frequency check (XFC) on/off."""
         _ensure_link()
         _link["instance"].set_xfc(on)
         return {"success": True, "xfc": on}
 
-    @mcp.tool()
+    @mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
     def set_rit(on: bool) -> Dict[str, Any]:
         """Set receive incremental tuning (RIT) on/off."""
         _ensure_link()
         _link["instance"].set_rit(on)
         return {"success": True, "rit": on}
 
-    @mcp.tool()
+    @mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
     def set_rit_freq(hz: int) -> Dict[str, Any]:
         """Set RIT offset in Hz, signed (range +-9999 Hz)."""
         _ensure_link()
@@ -454,14 +454,14 @@ def create_radio_link_server(
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    @mcp.tool()
+    @mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
     def set_dtx(on: bool) -> Dict[str, Any]:
         """Set delta-TX (dTX) on/off."""
         _ensure_link()
         _link["instance"].set_dtx(on)
         return {"success": True, "dtx": on}
 
-    @mcp.tool()
+    @mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True})
     def scan_start(mode: str = "programmed") -> Dict[str, Any]:
         """Start a scan. mode: "programmed_mem" | "programmed" | "df" |
         "fine_programmed" | "fine_df" | "memory" | "select_memory" | "mode_select"."""
@@ -472,14 +472,14 @@ def create_radio_link_server(
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    @mcp.tool()
+    @mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True})
     def scan_stop() -> Dict[str, Any]:
         """Cancel/stop scanning."""
         _ensure_link()
         _link["instance"].scan_stop()
         return {"success": True, "scan": "stopped"}
 
-    @mcp.tool()
+    @mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True})
     def speech(what: str = "all") -> Dict[str, Any]:
         """Voice-announce. what: "all" (everything) | "freq" (frequency+S-meter)
         | "mode". The radio speaks - mind the volume."""
@@ -490,7 +490,7 @@ def create_radio_link_server(
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    @mcp.tool()
+    @mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
     def set_if_filter(idx: int) -> Dict[str, Any]:
         """Set IF filter bandwidth index (0x1A 0x03). range: SSB/CW 0~40, AM 0~49."""
         _ensure_link()
@@ -500,7 +500,7 @@ def create_radio_link_server(
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    @mcp.tool()
+    @mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
     def set_max_tx_power(val: int) -> Dict[str, Any]:
         """Set max TX power level (battery pack: 0=0.5W 1=1W 2=2.5W 3=5W)."""
         _ensure_link()
@@ -510,7 +510,7 @@ def create_radio_link_server(
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    @mcp.tool()
+    @mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
     def restore_freq() -> Dict[str, Any]:
         """Restore the original frequency captured when the MCP server started.
 
@@ -530,7 +530,7 @@ def create_radio_link_server(
             return {"success": False, "error": str(e)}
 
     # ── shutdown ────────────────────────────────────────────────────────────
-    @mcp.tool()
+    @mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True})
     def shutdown() -> str:
         """Close the radio connection cleanly. Call this before stopping the server."""
         _close_link()
