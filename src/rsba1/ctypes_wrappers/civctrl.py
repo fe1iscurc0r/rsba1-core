@@ -22,10 +22,10 @@
 from __future__ import annotations
 
 import os
+import sys
 import time
 import ctypes
 from ctypes import (
-    WinDLL,
     c_void_p,
     c_int,
     c_uint8,
@@ -35,6 +35,14 @@ from ctypes import (
     byref,
     create_string_buffer,
 )
+
+# WinDLL 是 Windows-only 的 ctypes 加载器; 非 Windows 平台导入安全,
+# 但任何真正的 DLL 加载都会抛出明确的 CivCtrlLoadError。
+# (rsba1 主路径 radio_link/mcp 均为纯 Python UDP, 不依赖本模块。)
+if sys.platform == "win32":
+    from ctypes import WinDLL
+else:
+    WinDLL = None  # type: ignore[assignment,misc]
 
 __all__ = [
     "CivCtrlError",
@@ -117,6 +125,11 @@ class CivCtrlDLL:
         if dll is not None:
             self.dll = dll
         else:
+            if WinDLL is None:
+                raise CivCtrlLoadError(
+                    "CivCtrl.dll 仅支持 Windows (ctypes.WinDLL 在本平台不可用), "
+                    "Linux/macOS 请使用纯 Python 的 radio-link 后端"
+                )
             path = dll_path or DEFAULT_CIVCTRL_DLL_PATH
             if not os.path.exists(path):
                 raise CivCtrlLoadError(f"CivCtrl.dll 不存在: {path}")

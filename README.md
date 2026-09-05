@@ -15,7 +15,7 @@ Icom's RS-BA1 software runs on Windows only and is closed-source. This project r
 ## Quick Start
 
 ```bash
-pip install rsba1-core
+pip install "rsba1-core[mcp]"   # MCP server needs fastmcp; plain CLI: pip install rsba1-core
 
 export RADIO_HOST=192.168.0.31
 export RADIO_USER=radio_user
@@ -24,6 +24,20 @@ export RADIO_PASSWORD=your_password
 python -m rsba1.mcp read-freq
 python -m rsba1.mcp set-freq 7074000
 ```
+
+## Platform Support
+
+| Platform | Network (radio-link) | Serial | Mailslot / CivCtrl.dll |
+|----------|---------------------|--------|------------------------|
+| Linux   | ✅ pure Python UDP   | ✅ `[serial]` | ❌ Windows-only |
+| macOS   | ✅ pure Python UDP   | ✅ `[serial]` | ❌ Windows-only |
+| Windows | ✅ pure Python UDP   | ✅ `[serial]` | ✅ legacy backends |
+
+The default `radio-link` backend is **pure Python UDP** — no Icom binaries, no
+DLLs, no pywin32. The Windows-only backends (`--backend mailslot`, `CivCtrl.dll`)
+live behind optional `[windows]` extras and are guarded so they never break
+imports or test collection on Linux/macOS. Serial support needs `pyserial`
+(`pip install "rsba1-core[serial]"`).
 
 ## MCP Server (for AI Agents)
 
