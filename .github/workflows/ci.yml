@@ -29,5 +29,4 @@ jobs:
           pip install -e ".[all]"
 
       - name: Run tests
-        run: |
-          python -m pytest tests/ -v --tb=short 2>&1 | head -100
+        run: python -m pytest tests/ -q --tb=short
