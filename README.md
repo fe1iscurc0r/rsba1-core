@@ -70,6 +70,7 @@ Key: no Windows APIs, no Icom DLLs, Python 3.11+ only.
 
 ## Documentation
 
+- **[README.zh-CN.md](README.zh-CN.md)** — 中文版说明
 - [docs/README.md](docs/README.md) — Bilingual (Chinese/English) full guide
 - [docs/MCP集成指南.md](docs/MCP集成指南.md) — MCP integration guide
 - [docs/真机验证报告.md](docs/真机验证报告.md) — E2E verification report
