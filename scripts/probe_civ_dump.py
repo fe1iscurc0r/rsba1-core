@@ -5,7 +5,7 @@
 
 用法:
     RSBA1_DEBUG_READER=1 python scripts\\probe_civ_dump.py \\
-        --host 192.168.0.31 --bind-ip 192.168.0.23 --secs 4
+        --host 192.0.2.10 --bind-ip 192.0.2.20 --secs 4
 """
 from __future__ import annotations
 
@@ -19,16 +19,16 @@ if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
 from rsba1.serial.serial_client import (  # noqa: E402
-    SerialClient,
     DEFAULT_SERIAL_PORT,
+    SerialClient,
 )
 
 
 def main() -> int:
     p = argparse.ArgumentParser()
-    p.add_argument("--host", default="192.168.0.31")
+    p.add_argument("--host", default="192.0.2.10")
     p.add_argument("--port-serial", type=int, default=DEFAULT_SERIAL_PORT)
-    p.add_argument("--bind-ip", default="192.168.0.23")
+    p.add_argument("--bind-ip", default="192.0.2.20")
     p.add_argument("--bind-port", type=int, default=None)
     p.add_argument("--secs", type=float, default=4.0)
     args = p.parse_args()

@@ -22,8 +22,8 @@
 from __future__ import annotations
 
 import os
-import sys
 import struct
+import sys
 import unittest
 from unittest import mock
 
@@ -33,17 +33,16 @@ if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
 # 延迟导入 client 模块, 便于在测试中 mock win32file (client 模块顶层已 import)
+from rsba1.mailslot import client as C  # noqa: E402
 from rsba1.mailslot import protocol as P  # noqa: E402
-from rsba1.mailslot import client as C   # noqa: E402
-from rsba1.mailslot.client import (       # noqa: E402
+from rsba1.mailslot.client import (  # noqa: E402
+    DEFAULT_MAILSLOT_NAME,
     MailslotClient,
     MailslotError,
     MailslotNotFoundError,
-    MailslotWriteError,
     MailslotTimeoutError,
-    DEFAULT_MAILSLOT_NAME,
+    MailslotWriteError,
 )
-
 
 # ============================================================
 # 1. 协议常量与命令码表

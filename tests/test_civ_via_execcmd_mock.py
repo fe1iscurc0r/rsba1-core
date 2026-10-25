@@ -19,8 +19,8 @@
 from __future__ import annotations
 
 import os
-import sys
 import struct
+import sys
 import unittest
 
 # 把 src/ 加到 sys.path
@@ -28,25 +28,23 @@ _SRC_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
+from rsba1.ctypes_wrappers import civ_commands as civcmd  # noqa: E402
 from rsba1.mailslot.civ_via_execcmd import (  # noqa: E402
-    DEFAULT_TO_ADDR,
-    DEFAULT_FROM_ADDR,
-    DEFAULT_SUB_CMD,
     DEFAULT_ARG3,
     DEFAULT_ARG6,
+    DEFAULT_FROM_ADDR,
+    DEFAULT_SUB_CMD,
+    DEFAULT_TO_ADDR,
     RESPONSE_MAILSLOT_NAME,
     build_exec_cmd_civ,
+    build_ptt_off_payload,
+    build_ptt_on_payload,
+    build_raw_civ_payload,
     build_read_freq_payload,
     build_read_mode_payload,
-    build_set_freq_payload,
-    build_ptt_on_payload,
-    build_ptt_off_payload,
     build_read_smeter_payload,
-    build_raw_civ_payload,
+    build_set_freq_payload,
 )
-from rsba1.mailslot.protocol import MAX_PAYLOAD_SIZE, CMD_EXEC_CMD  # noqa: E402
-from rsba1.ctypes_wrappers import civ_commands as civcmd  # noqa: E402
-
 
 # ============================================================
 # 1. build_exec_cmd_civ — ExecCmd payload 结构

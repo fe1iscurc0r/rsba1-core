@@ -3,19 +3,20 @@ name = "rsba1-core"
 version = "1.0.0"
 description = "Pure Python RS-BA1 protocol stack for Icom transceivers (IC-705, IC-9700)"
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{name = "Shen Yao"}]
 requires-python = ">=3.11"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: Microsoft :: Windows",
     "Operating System :: POSIX :: Linux",
     "Operating System :: MacOS",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Communications :: Radio",
     "Topic :: Scientific/Engineering",
 ]
@@ -44,9 +45,10 @@ Homepage = "https://github.com/fe1iscurc0r/rsba1-core"
 Documentation = "https://github.com/fe1iscurc0r/rsba1-core#readme"
 Repository = "https://github.com/fe1iscurc0r/rsba1-core"
 Issues = "https://github.com/fe1iscurc0r/rsba1-core/issues"
+Changelog = "https://github.com/fe1iscurc0r/rsba1-core/blob/main/CHANGELOG.md"
 
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
@@ -56,3 +58,19 @@ where = ["src"]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+extend-exclude = ["scripts/legacy"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+# E501 line length is handled by the formatter; B904/UP031 have a handful of
+# pre-existing hits in protocol code that are fixed opportunistically, not in bulk.
+ignore = ["E501", "B904", "UP031"]
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/*" = ["E402"]
+"src/rsba1/mcp/*" = ["E402"]
+"tests/*" = ["F841", "E402"]

@@ -40,7 +40,6 @@ from __future__ import annotations
 
 import struct
 from dataclasses import dataclass
-from typing import Tuple
 
 __all__ = [
     # 结构常量
@@ -175,7 +174,7 @@ def build_wire_header(
     )
 
 
-def parse_wire_header(data: bytes) -> Tuple[UDP2WireHeader, int]:
+def parse_wire_header(data: bytes) -> tuple[UDP2WireHeader, int]:
     """解析 UDP2 wire 头.
 
     参数:
@@ -285,7 +284,7 @@ def build_udp_packet(
     return wire + frame
 
 
-def parse_udp_packet(data: bytes) -> Tuple[UDP2WireHeader, SerialFrame]:
+def parse_udp_packet(data: bytes) -> tuple[UDP2WireHeader, SerialFrame]:
     """解析完整 UDP 包 (wire 头 + Serial 帧).
 
     参数:

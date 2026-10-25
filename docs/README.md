@@ -50,7 +50,7 @@ pip install -e ".[all]"
 
 ```bash
 # 设置凭证环境变量（推荐 —— 避免密码进 shell 历史）
-export RADIO_HOST=192.168.0.31
+export RADIO_HOST=192.0.2.10
 export RADIO_USER=radio_user
 export RADIO_PASSWORD=你的密码
 
@@ -65,14 +65,14 @@ python -m rsba1.mcp
 
 ```bash
 python scripts/e2e_civ_loop.py \
-  --host 192.168.0.31 \
+  --host 192.0.2.10 \
   --user radio_user \
   --pwd 你的密码
 ```
 
 预期输出：
 ```
-=== E2E: RS-BA1 CI-V loopback 192.168.0.31 (user=radio_user) ===
+=== E2E: RS-BA1 CI-V loopback 192.0.2.10 (user=radio_user) ===
 [0] Original frequency: 144.920000 MHz
 [1] read_freq loop (3x)
   1. 144.920000 MHz  mode=FM

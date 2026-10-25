@@ -8,7 +8,7 @@
     RemoteController.exe 未运行 (否则响应 mailslot 被占用)。
 
 本模块把这些封装成 MCP tool。默认 tool 采用闭环查询 (query_*)
-以返回结构化结果给陆墨; 优先用 query_* 实现, 并提供 set_freq/ptt
+以返回结构化结果给客户端; 优先用 query_* 实现, 并提供 set_freq/ptt
 这类"写"操作 (本身无应答, 走 fire-and-forget)。
 
 tool 清单:
@@ -24,11 +24,10 @@ tool 清单:
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
-from rsba1.mailslot.civ_via_execcmd import CivViaExecCmdSender
 from rsba1.mailslot import civ_response as civresp
-
+from rsba1.mailslot.civ_via_execcmd import CivViaExecCmdSender
 
 # ============================================================
 # FastMCP 惰性加载
@@ -57,7 +56,7 @@ def create_server(
     to_addr: int = 0xA4,
     from_addr: int = 0x00,
     query_timeout_ms: int = 2000,
-    sender: Optional[CivViaExecCmdSender] = None,
+    sender: CivViaExecCmdSender | None = None,
 ) -> Any:
     """创建并返回 FastMCP 服务实例 (含全部 tool 注册)。
 
@@ -113,7 +112,7 @@ def create_server(
     # read_mode — 闭环查询模式
     # ----------------------------------------------------------
     @mcp.tool()
-    def read_mode() -> Dict[str, Any]:
+    def read_mode() -> dict[str, Any]:
         """读取电台当前工作模式。
 
         返回:
@@ -200,7 +199,7 @@ def create_server(
     # get_status — 组合状态查询
     # ----------------------------------------------------------
     @mcp.tool()
-    def get_status() -> Dict[str, Any]:
+    def get_status() -> dict[str, Any]:
         """一站式读取电台当前频率 + 模式 + S-meter。
 
         返回:
@@ -215,7 +214,7 @@ def create_server(
         说明: 依次执行三次闭环查询, 任一失败则对应字段为 None。
         """
         sender.open()
-        status: Dict[str, Any] = {}
+        status: dict[str, Any] = {}
         try:
             status["freq"] = sender.query_freq(timeout_ms=query_timeout_ms)
         except Exception:

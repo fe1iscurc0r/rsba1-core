@@ -19,11 +19,11 @@
 
 用法:
     cd d:\\my git\\rs-ba1-reverse
-    python scripts\\send_serial_civ.py --host 192.168.1.10 read_freq
-    python scripts\\send_serial_civ.py --host 192.168.1.10 set_freq 14270000
-    python scripts\\send_serial_civ.py --host 192.168.1.10 ptt_on
-    python scripts\\send_serial_civ.py --host 192.168.1.10 raw fefea4e003fd
-    python scripts\\send_serial_civ.py --host 192.168.1.10 read_freq --timeout 3.0 -v
+    python scripts\\send_serial_civ.py --host 192.0.2.10 read_freq
+    python scripts\\send_serial_civ.py --host 192.0.2.10 set_freq 14270000
+    python scripts\\send_serial_civ.py --host 192.0.2.10 ptt_on
+    python scripts\\send_serial_civ.py --host 192.0.2.10 raw fefea4e003fd
+    python scripts\\send_serial_civ.py --host 192.0.2.10 read_freq --timeout 3.0 -v
 
 注意:
     - field_8/field_C 默认使用线上确证的会话 id 常值; 若服务器不回包,
@@ -42,10 +42,10 @@ if str(_SRC_DIR) not in sys.path:
     sys.path.insert(0, str(_SRC_DIR))
 
 from rsba1.serial.serial_client import (  # noqa: E402
+    DEFAULT_SERIAL_PORT,
     SerialClient,
     SerialClientError,
     SerialTimeoutError,
-    DEFAULT_SERIAL_PORT,
 )
 
 log = logging.getLogger("send_serial_civ")
@@ -118,7 +118,7 @@ def main(argv=None) -> int:
 
     # 尝试解析频率 (读频率应答: cmd=0x03 后接 5 字节 BCD)
     if args.command == "read_freq" and len(resp) >= 8:
-        from rsba1.ctypes_wrappers.civ_commands import parse_frame, bytes_to_freq
+        from rsba1.ctypes_wrappers.civ_commands import bytes_to_freq, parse_frame
         try:
             _, _, cmd, payload = parse_frame(resp)
             if cmd == 0x03:

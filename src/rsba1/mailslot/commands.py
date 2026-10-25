@@ -15,21 +15,18 @@
 from __future__ import annotations
 
 import struct
-from typing import Optional, Tuple
 
 from rsba1.mailslot.protocol import (
-    CMD_GET_COUNT_CLIENT_TRANS,
     CMD_GET_CLIENT_TRANS_INFO,
-    CMD_EXEC_CMD,
-    CMD_GET_CLIENT_TRANS_VOL,
     CMD_GET_CLIENT_TRANS_INFO_2,
+    CMD_GET_CLIENT_TRANS_VOL,
     CMD_GET_CLIENT_TRANS_VOL_3,
     CMD_GET_COMMAND_PROC_COUNT,
+    CMD_GET_COUNT_CLIENT_TRANS,
     CMD_GET_REMOTE_TRANS_NETWORK_SET,
     CMD_GET_REMOTE_TRANS_STATE,
     MAX_PAYLOAD_SIZE,
 )
-
 
 # ============================================================
 # 各命令的 payload 构造器
@@ -139,7 +136,7 @@ def build_get_remote_trans_state(arg1: int = 0) -> bytes:
 # ============================================================
 
 def build_exec_cmd(arg3: int, arg5: int, arg6_byte: int, user_data: bytes,
-                   sub_cmd: int = 0) -> Tuple[bytes, int]:
+                   sub_cmd: int = 0) -> tuple[bytes, int]:
     """cmd_code=0x02 ExecCmd (动态长度 payload)。
 
     字段 (command_protocol.md §4.3 + mailslot_server.md §3.2 交叉验证):

@@ -1,6 +1,6 @@
 # MCP 客户端接入指南 / MCP Client Integration Guide
 
-> 让 AI Agent（陆墨 / Claude Desktop / Cursor 等）通过 MCP 协议控制 IC-705 电台。
+> 让 AI Agent（客户端 / Claude Desktop / Cursor 等）通过 MCP 协议控制 IC-705 电台。
 
 ## 前置条件 / Prerequisites
 
@@ -8,7 +8,7 @@
 |------|------|
 | Python | 3.11+ |
 | rsba1-core | 已安装 (`pip install rsba1-core`) |
-| MCP 客户端 | 陆墨或其他 MCP 兼容客户端 |
+| MCP 客户端 | 客户端或其他 MCP 兼容客户端 |
 | IC-705 | 已开启 RS-BA1 服务器，已连接 |
 
 ## 快速开始 / Quick Start
@@ -16,7 +16,7 @@
 ### 方式一：直接命令行调用（无需配置客户端）
 
 ```bash
-export RADIO_HOST=192.168.0.31
+export RADIO_HOST=192.0.2.10
 export RADIO_USER=radio_user
 export RADIO_PASSWORD=你的密码
 

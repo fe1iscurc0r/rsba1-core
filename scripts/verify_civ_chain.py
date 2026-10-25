@@ -32,18 +32,18 @@ _SRC_DIR = _SCRIPT_DIR.parent / "src"
 if str(_SRC_DIR) not in sys.path:
     sys.path.insert(0, str(_SRC_DIR))
 
-from rsba1.mailslot.client import (  # noqa: E402
-    MailslotClient,
-    DEFAULT_MAILSLOT_NAME,
-    MailslotError,
-)
 from rsba1.mailslot.civ_via_execcmd import (  # noqa: E402
+    DEFAULT_FROM_ADDR,
+    DEFAULT_TO_ADDR,
     CivViaExecCmdSender,
     build_read_freq_payload,
     build_read_mode_payload,
     build_read_smeter_payload,
-    DEFAULT_TO_ADDR,
-    DEFAULT_FROM_ADDR,
+)
+from rsba1.mailslot.client import (  # noqa: E402
+    DEFAULT_MAILSLOT_NAME,
+    MailslotClient,
+    MailslotError,
 )
 
 LOG = logging.getLogger("verify_civ_chain")
@@ -80,7 +80,7 @@ def main() -> int:
         datefmt="%H:%M:%S",
     )
 
-    print(f"\n=== CI-V 经 ExecCmd 链路验证 (只读) ===")
+    print("\n=== CI-V 经 ExecCmd 链路验证 (只读) ===")
     print(f"Mailslot: {args.mailslot}")
     print(f"电台地址 to=0x{args.to_addr:02X} from=0x{args.from_addr:02X}")
     print(f"模式: {'dry-run (不写入)' if args.dry_run else '实发'}")
@@ -98,7 +98,7 @@ def main() -> int:
                 success += 1
             except Exception as e:
                 print(f"  {name:28s}  ✗ {e}")
-        print(f"\n=== 结果 (dry-run) ===")
+        print("\n=== 结果 (dry-run) ===")
         print(f"构造成功: {success}/{len(PAYLOAD_BUILDERS)}")
         print("  实发请去掉 --dry-run")
         return 0
@@ -111,7 +111,7 @@ def main() -> int:
         print(f"✓ Mailslot 已打开: {args.mailslot}")
     except MailslotError as e:
         print(f"✗ 打开 Mailslot 失败: {e}")
-        print(f"  提示: 请确认 RS-BA1 GUI 已启动 (RemoteUtility.exe 在跑) 且已连上 IC-705")
+        print("  提示: 请确认 RS-BA1 GUI 已启动 (RemoteUtility.exe 在跑) 且已连上 IC-705")
         return 1
 
     success = 0
@@ -135,9 +135,9 @@ def main() -> int:
                     failed += 1
     finally:
         client.close()
-        print(f"\n✓ Mailslot 已关闭")
+        print("\n✓ Mailslot 已关闭")
 
-    print(f"\n=== 结果 ===")
+    print("\n=== 结果 ===")
     print(f"成功: {success}/{len(PAYLOAD_BUILDERS)}")
     print(f"失败: {failed}/{len(PAYLOAD_BUILDERS)}")
 

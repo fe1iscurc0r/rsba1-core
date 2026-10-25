@@ -3,7 +3,7 @@
 
 前置条件:
     1. RS-BA1 RemoteUtility.exe 在跑 (用户开了 RS-BA1 GUI)
-    2. mailslot_probe.py 已确认 \\.\mailslot\\RemoteUtyCtrlCmd 存在
+    2. mailslot_probe.py 已确认 \\.\\mailslot\\RemoteUtyCtrlCmd 存在
 
 本脚本:
     - 顺序发送 cmd 0, 1, 3, 4, 5, 6, 7, 8 (跳过 ExecCmd=2, 避免干扰电台)
@@ -13,7 +13,7 @@
 
 用法:
     python verify_mailslot_chain.py
-    python verify_mailslot_chain.py --mailslot "\\\\.\\\mailslot\\RemoteUtyCtrlCmd"
+    python verify_mailslot_chain.py --mailslot "\\\\.\\\\mailslot\\RemoteUtyCtrlCmd"
     python verify_mailslot_chain.py --dry-run   # 仅打印不发送
 """
 from __future__ import annotations
@@ -30,15 +30,14 @@ _SRC_DIR = _SCRIPT_DIR.parent / "src"
 if str(_SRC_DIR) not in sys.path:
     sys.path.insert(0, str(_SRC_DIR))
 
-from rsba1.mailslot.client import MailslotClient, DEFAULT_MAILSLOT_NAME, MailslotError
-from rsba1.mailslot.protocol import CMD_CODES, CMD_NAME
+from rsba1.mailslot.client import DEFAULT_MAILSLOT_NAME, MailslotClient, MailslotError
 from rsba1.mailslot.commands import (
-    build_get_count_client_trans,
     build_get_client_trans_info,
-    build_get_client_trans_vol,
     build_get_client_trans_info_2,
+    build_get_client_trans_vol,
     build_get_client_trans_vol_3,
     build_get_command_proc_count,
+    build_get_count_client_trans,
     build_get_remote_trans_network_set,
     build_get_remote_trans_state,
 )
@@ -73,7 +72,7 @@ def main() -> int:
         datefmt="%H:%M:%S",
     )
 
-    print(f"\n=== Mailslot 链路验证 ===")
+    print("\n=== Mailslot 链路验证 ===")
     print(f"Mailslot: {args.mailslot}")
     print(f"模式: {'dry-run (不写入)' if args.dry_run else '实发'}")
     print()
@@ -87,7 +86,7 @@ def main() -> int:
             print(f"✓ Mailslot 已打开: {args.mailslot}")
         except MailslotError as e:
             print(f"✗ 打开 Mailslot 失败: {e}")
-            print(f"  提示: 请确认 RS-BA1 GUI 已启动 (RemoteUtility 在跑)")
+            print("  提示: 请确认 RS-BA1 GUI 已启动 (RemoteUtility 在跑)")
             return 1
 
     success = 0
@@ -114,9 +113,9 @@ def main() -> int:
 
     if client:
         client.close()
-        print(f"\n✓ Mailslot 已关闭")
+        print("\n✓ Mailslot 已关闭")
 
-    print(f"\n=== 结果 ===")
+    print("\n=== 结果 ===")
     print(f"成功: {success}/{len(TEST_SEQUENCE)}")
     print(f"失败: {failed}/{len(TEST_SEQUENCE)}")
 

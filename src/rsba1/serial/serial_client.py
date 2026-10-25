@@ -13,7 +13,7 @@
     - 服务器应答 payload 的 Serial 帧 [5..] 即 CI-V 响应帧。
 
 用法:
-    with SerialClient(host="192.168.1.10", ...) as c:
+    with SerialClient(host="192.0.2.10", ...) as c:
         c.send_read_freq()
         resp = c.read_civ_response(timeout=2.0)
         print(resp.hex())
@@ -30,25 +30,24 @@ import socket
 import struct
 import threading
 import time
-from typing import Optional, Tuple
 
+from rsba1.ctypes_wrappers import civ_commands as civcmd
 from rsba1.serial.serial_codec import (
-    WIRE_HEADER_SIZE,
     SERIAL_FRAME_HEADER_SIZE,
     UDP2_PKT_TYPE_DATA,
-    UDP2_PKT_TYPE_RETRANSMIT,
+    UDP2_PKT_TYPE_KEEPALIVE,
     UDP2_PKT_TYPE_PKT3,
     UDP2_PKT_TYPE_PKT4,
     UDP2_PKT_TYPE_PKT6,
-    UDP2_PKT_TYPE_KEEPALIVE,
-    UDP2WireHeader,
+    UDP2_PKT_TYPE_RETRANSMIT,
+    WIRE_HEADER_SIZE,
     SerialFrame,
-    build_wire_header,
-    parse_wire_header,
+    UDP2WireHeader,
     build_serial_frame,
+    build_wire_header,
     parse_serial_frame,
+    parse_wire_header,
 )
-from rsba1.ctypes_wrappers import civ_commands as civcmd
 
 __all__ = [
     "DEFAULT_SERIAL_PORT",
@@ -97,7 +96,7 @@ class SerialClient:
                   真实客户端源端口 = 50002, 见 serial_channel.md §5.4)。
                   为 None 时用系统随机临时端口。
         bind_ip:  绑定源 IP (仅 bind_port 非 None 时生效)。默认 127.0.0.1;
-                  需经 LAN IP 访问时填本机局域网地址 (如 192.168.0.23)。
+                  需经 LAN IP 访问时填本机局域网地址 (如 192.0.2.20)。
     """
 
     def __init__(
@@ -105,12 +104,12 @@ class SerialClient:
         host: str,
         port: int = DEFAULT_SERIAL_PORT,
         *,
-        field_8: Optional[int] = None,
-        field_C: Optional[int] = None,
+        field_8: int | None = None,
+        field_C: int | None = None,
         to_addr: int = civcmd.IC705_TO_ADDR,
         from_addr: int = civcmd.DEFAULT_FROM_ADDR,
         timeout: float = 2.0,
-        bind_port: Optional[int] = None,
+        bind_port: int | None = None,
         bind_ip: str = "127.0.0.1",
     ):
         self.host = host
@@ -125,16 +124,16 @@ class SerialClient:
         self.timeout = timeout
         self.bind_port = bind_port
         self.bind_ip = bind_ip
-        self._sock: Optional[socket.socket] = None
+        self._sock: socket.socket | None = None
         self._seq = 0          # UDP2 wire 头 seq (LE uint16, 发送侧递增)
         self._sseq = 0         # Serial 帧 sseq (BE uint16, 发送侧递增)
         self._sent_seqs: set = set()  # 已发送的 wire seq (绑定源端口时用于过滤回环包)
         self._tx_buf: dict = {}  # {wire seq: 完整已发数据包 bytes}, 用于响应服务器 RETRANSMIT 重传请求
         self._handshake_done = False
         # 后台单消费者读取线程: 回传服务器空探测包, 并把含数据的包置入队列
-        self._resp_queue: "queue.Queue[Tuple[Optional[UDP2WireHeader], Optional[SerialFrame]]]" = queue.Queue()
+        self._resp_queue: queue.Queue[tuple[UDP2WireHeader | None, SerialFrame | None]] = queue.Queue()
         self._reader_stop = threading.Event()
-        self._reader_thread: Optional[threading.Thread] = None
+        self._reader_thread: threading.Thread | None = None
         self._echo_seqs: set = set()  # 已回传的空探测 seq (回环模式下防死循环)
 
     # ============================================================
@@ -240,7 +239,7 @@ class SerialClient:
             finally:
                 self._sock = None
 
-    def __enter__(self) -> "SerialClient":
+    def __enter__(self) -> SerialClient:
         self.open()
         return self
 
@@ -279,7 +278,7 @@ class SerialClient:
         while not self._reader_stop.is_set():
             try:
                 data, addr = self._sock.recvfrom(0x1000)
-            except socket.timeout:
+            except TimeoutError:
                 continue
             except OSError:  # socket 已关闭
                 break
@@ -447,7 +446,7 @@ class SerialClient:
     # 接收 & 解析
     # ============================================================
 
-    def recv_udp(self, timeout: Optional[float] = None) -> bytes:
+    def recv_udp(self, timeout: float | None = None) -> bytes:
         """接收一个 UDP 数据报 (原始 bytes).
 
         参数:
@@ -469,7 +468,7 @@ class SerialClient:
             try:
                 data, _ = self._sock.recvfrom(0x1000)
                 return data
-            except socket.timeout:
+            except TimeoutError:
                 raise SerialTimeoutError(
                     f"接收 UDP 数据超时 ({timeout if timeout is not None else self.timeout} s)"
                 )
@@ -478,7 +477,7 @@ class SerialClient:
                 self._sock.settimeout(old)
 
     def read_civ_response(
-        self, timeout: Optional[float] = None, max_packets: int = 16
+        self, timeout: float | None = None, max_packets: int = 16
     ) -> bytes:
         """读取并返回一条 CI-V 响应帧 (从后台读取线程的队列取).
 
@@ -516,7 +515,7 @@ class SerialClient:
         )
 
     @staticmethod
-    def _try_parse(data: bytes) -> Tuple[Optional[UDP2WireHeader], Optional[SerialFrame]]:
+    def _try_parse(data: bytes) -> tuple[UDP2WireHeader | None, SerialFrame | None]:
         """安全解析一个 UDP 包, 失败返回 (None, None)."""
         try:
             wire, total_len = parse_wire_header(data)

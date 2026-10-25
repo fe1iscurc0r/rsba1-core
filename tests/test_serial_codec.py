@@ -25,18 +25,16 @@ if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
 from rsba1.serial.serial_codec import (  # noqa: E402
-    WIRE_HEADER_SIZE,
-    SERIAL_FRAME_HEADER_SIZE,
     UDP2_PKT_TYPE_DATA,
     UDP2_PKT_TYPE_KEEPALIVE,
+    WIRE_HEADER_SIZE,
     UDP2WireHeader,
-    SerialFrame,
-    build_wire_header,
-    parse_wire_header,
     build_serial_frame,
-    parse_serial_frame,
     build_udp_packet,
+    build_wire_header,
+    parse_serial_frame,
     parse_udp_packet,
+    parse_wire_header,
 )
 
 

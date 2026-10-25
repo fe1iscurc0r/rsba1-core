@@ -23,13 +23,12 @@ _SRC_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
+from rsba1.ctypes_wrappers import civ_commands as civcmd  # noqa: E402
 from rsba1.mailslot import civ_response as civresp  # noqa: E402
 from rsba1.mailslot.civ_via_execcmd import (  # noqa: E402
     CivViaExecCmdSender,
     ResponseTimeoutError,
 )
-from rsba1.ctypes_wrappers import civ_commands as civcmd  # noqa: E402
-
 
 # ============================================================
 # 帮助: 构造 CI-V 应答帧

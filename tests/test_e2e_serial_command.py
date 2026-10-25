@@ -10,7 +10,7 @@
 
 运行方式:
     python tests\\test_e2e_serial_command.py            # 回环 E2E (真机项跳过)
-    $env:RSBA1_E2E_HOST="192.168.0.23"; python tests\\test_e2e_serial_command.py
+    $env:RSBA1_E2E_HOST="192.0.2.20"; python tests\\test_e2e_serial_command.py
 
 依赖:
     - 仅 Python 标准库 (unittest + socket)
@@ -31,26 +31,25 @@ if _SRC_DIR not in sys.path:
 
 from rsba1.serial.command_client import (  # noqa: E402
     CMD_HEADER_SIZE,
-    CMD_CONNECT,
     CMD_KEEPALIVE,
     CommandClient,
     build_command_header,
     parse_command_header,
 )
+from rsba1.serial.serial_client import (  # noqa: E402
+    SerialClient,
+    SerialTimeoutError,
+)
 from rsba1.serial.serial_codec import (  # noqa: E402
-    WIRE_HEADER_SIZE,
     UDP2_PKT_TYPE_DATA,
     UDP2_PKT_TYPE_PKT3,
     UDP2_PKT_TYPE_PKT4,
     UDP2_PKT_TYPE_PKT6,
-    parse_wire_header,
-    parse_serial_frame,
-    build_wire_header,
+    WIRE_HEADER_SIZE,
     build_serial_frame,
-)
-from rsba1.serial.serial_client import (  # noqa: E402
-    SerialClient,
-    SerialTimeoutError,
+    build_wire_header,
+    parse_serial_frame,
+    parse_wire_header,
 )
 
 # 服务器回环地址
@@ -115,7 +114,7 @@ class E2EFakeServer:
         while not self._stop.is_set():
             try:
                 data, addr = sock.recvfrom(0x1000)
-            except socket.timeout:
+            except TimeoutError:
                 continue
             except OSError:
                 break
@@ -179,7 +178,7 @@ class E2EFakeServer:
         while not self._stop.is_set():
             try:
                 data, addr = sock.recvfrom(0x1000)
-            except socket.timeout:
+            except TimeoutError:
                 continue
             except OSError:
                 break

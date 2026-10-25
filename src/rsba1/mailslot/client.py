@@ -4,7 +4,7 @@
     模拟"第二 RemoteController", 不依赖 RemoteController.exe / UtyCtrl.dll,
     直接由 Python 进程把命令包写入 RemoteUtility 已经在监听的 Mailslot。
 
-    RemoteUtility (服务端) 用 CreateMailslotA 创建 \\.\mailslot\\<name> 并
+    RemoteUtility (服务端) 用 CreateMailslotA 创建 \\.\\mailslot\\<name> 并
     循环 ReadFile 等待命令; 客户端 (本类) 用 CreateFile + WriteFile 把
     4 字节头 + payload 的命令包写进去。
 
@@ -45,14 +45,11 @@ from __future__ import annotations
 
 import ctypes
 from ctypes import wintypes
-from typing import Optional, Tuple
 
 from rsba1.mailslot.protocol import (
-    serialize_command,
-    deserialize_command,
     MAX_PACKET_SIZE,
-    MAX_PAYLOAD_SIZE,
-    COMMAND_HEADER_SIZE,
+    deserialize_command,
+    serialize_command,
 )
 
 __all__ = [
@@ -75,7 +72,7 @@ __all__ = [
 ]
 
 # ============================================================
-# 默认 Mailslot 名 (占位, 待沈遥动态确认)
+# 默认 Mailslot 名 (占位, 待实机动态确认)
 # ============================================================
 # 任务规格默认值: \\.\mailslot\civsend (可配置)
 # 现有静态反汇编 (UtyCtrl_deep_analysis.md 5.4) 推断实际值为:
@@ -85,7 +82,7 @@ __all__ = [
 #     - \\.\mailslot\civsend            -> 不存在 (WinError 2)
 #     - \\.\mailslot\RemoteUtyCtrlCmd  -> 存在且接受 WriteFile (4 字节探活包成功)
 #     - 其它候选 (RemoteCivCtrlCmd / RemoteHidCtrlCmd / RemoteUtyCtrlRes) -> 不存在
-# 沈遥逆向确认 (command_protocol.md §1): 核心函数 0x100010C7 + ExecCmd 0x1000174E 均引用此字符串
+# 实机逆向确认 (command_protocol.md §1): 核心函数 0x100010C7 + ExecCmd 0x1000174E 均引用此字符串
 DEFAULT_MAILSLOT_NAME = r"\\.\mailslot\RemoteUtyCtrlCmd"
 
 # ============================================================
@@ -111,8 +108,8 @@ BACKEND_CTYPES = "ctypes"
 
 # 尝试导入 pywin32 (主路径), 失败则启用 ctypes 后备路径
 try:
-    import win32file       # type: ignore
-    import pywintypes      # type: ignore
+    import pywintypes  # type: ignore
+    import win32file  # type: ignore
     _HAS_PYWIN32 = True
 except ImportError:         # pragma: no cover - 仅在 pywin32 未装时触发
     win32file = None        # type: ignore
@@ -127,7 +124,7 @@ except ImportError:         # pragma: no cover - 仅在 pywin32 未装时触发
 class MailslotError(Exception):
     """Mailslot 客户端基础异常。"""
 
-    def __init__(self, message: str, *, win_error: Optional[int] = None):
+    def __init__(self, message: str, *, win_error: int | None = None):
         super().__init__(message)
         self.win_error = win_error
 
@@ -217,7 +214,7 @@ class MailslotClient:
         self,
         mailslot_name: str = DEFAULT_MAILSLOT_NAME,
         *,
-        backend: Optional[str] = None,
+        backend: str | None = None,
         write_timeout_ms: int = 0,
         reserved: int = 0,
     ):
@@ -253,7 +250,7 @@ class MailslotClient:
         self._handle = None  # type: Optional[object]
         # 上次操作诊断信息 (调试用)
         self.last_bytes_written: int = 0
-        self.last_win_error: Optional[int] = None
+        self.last_win_error: int | None = None
 
     # ============================================================
     # 打开 / 关闭 Mailslot 写入端
@@ -352,7 +349,7 @@ class MailslotClient:
         self,
         cmd_code: int,
         payload: bytes = b"",
-        reserved: Optional[int] = None,
+        reserved: int | None = None,
     ) -> int:
         """序列化命令包并 WriteFile 到 Mailslot。
 
@@ -462,8 +459,8 @@ class MailslotClient:
         cmd_code: int,
         payload: bytes = b"",
         *,
-        reserved: Optional[int] = None,
-    ) -> Tuple[int, int, int, bytes]:
+        reserved: int | None = None,
+    ) -> tuple[int, int, int, bytes]:
         """写命令后立即反序列化本地写入的包 (自检/调试用)。
 
         返回 deserialize_command(本地写入的字节流)。
@@ -480,7 +477,7 @@ class MailslotClient:
     # 上下文管理器
     # ============================================================
 
-    def __enter__(self) -> "MailslotClient":
+    def __enter__(self) -> MailslotClient:
         self.open()
         return self
 

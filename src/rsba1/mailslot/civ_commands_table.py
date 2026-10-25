@@ -24,8 +24,6 @@
 """
 from __future__ import annotations
 
-from typing import Dict, List, Tuple
-
 from rsba1.ctypes_wrappers import civ_commands as civcmd
 
 __all__ = [
@@ -60,7 +58,7 @@ DEFAULT_FROM_ADDR = civcmd.DEFAULT_FROM_ADDR  # 0x00
 # 模式编码 (CI-V 设模式命令 cmd=0x05 的 mode 字节)
 # ============================================================
 
-MODE_CODE: Dict[str, int] = {
+MODE_CODE: dict[str, int] = {
     "LSB": 0x00,
     "USB": 0x01,
     "AM": 0x02,
@@ -74,7 +72,7 @@ MODE_CODE: Dict[str, int] = {
 }
 
 # 反向映射: 字节 -> 模式名
-MODE_CODE_NAME: Dict[int, str] = {v: k for k, v in MODE_CODE.items()}
+MODE_CODE_NAME: dict[int, str] = {v: k for k, v in MODE_CODE.items()}
 
 
 def mode_name_to_code(name: str) -> int:
@@ -100,7 +98,7 @@ def mode_name_to_code(name: str) -> int:
 # SET_FREQ / SET_MODE 为动态命令, 表内仅存命令前缀字节, 数据由构造器追加。
 # ============================================================
 
-COMMAND_TABLE: Dict[str, Tuple[bytes, str]] = {
+COMMAND_TABLE: dict[str, tuple[bytes, str]] = {
     "READ_FREQ": (b"\x03", "读频率"),
     "READ_MODE": (b"\x04", "读模式"),
     "SET_FREQ": (bytes([civcmd.CMD_SET_FREQ]), "设频率 (VFO, 后接 5 字节 BCD)"),
@@ -110,7 +108,7 @@ COMMAND_TABLE: Dict[str, Tuple[bytes, str]] = {
     "PTT_OFF": (bytes([civcmd.CMD_PTT, civcmd.CMD_PTT_SUB, 0x00]), "PTT 关 (RX)"),
 }
 
-COMMAND_NAMES: List[str] = list(COMMAND_TABLE)
+COMMAND_NAMES: list[str] = list(COMMAND_TABLE)
 
 
 # ============================================================
@@ -120,7 +118,7 @@ COMMAND_NAMES: List[str] = list(COMMAND_TABLE)
 #   1.8-30 MHz (HF), 50-54 MHz (6m), 144-148 MHz (2m)。
 # ============================================================
 
-AMATEUR_BANDS: List[Tuple[int, int]] = [
+AMATEUR_BANDS: list[tuple[int, int]] = [
     (1_800_000, 30_000_000),    # 1.8-30 MHz HF
     (50_000_000, 54_000_000),   # 50-54 MHz 6m
     (144_000_000, 148_000_000),  # 144-148 MHz 2m

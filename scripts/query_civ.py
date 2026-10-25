@@ -29,12 +29,12 @@ _SRC = Path(__file__).resolve().parent.parent / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
+from rsba1.mailslot import civ_response as civresp  # noqa: E402
 from rsba1.mailslot.civ_via_execcmd import (  # noqa: E402
     CivViaExecCmdSender,
-    ResponseTimeoutError,
     ResponseReadError,
+    ResponseTimeoutError,
 )
-from rsba1.mailslot import civ_response as civresp  # noqa: E402
 
 
 def main() -> int:

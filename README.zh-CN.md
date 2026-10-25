@@ -19,7 +19,7 @@ Icom 的 RS-BA1 远程控制软件**只能在 Windows 上运行且闭源**。本
 ```bash
 pip install "rsba1-core[mcp]"   # MCP server 需要 fastmcp；纯 CLI 用 pip install rsba1-core
 
-export RADIO_HOST=192.168.0.31      # IC-705 的 IP（开远程服务器后）
+export RADIO_HOST=192.0.2.10      # IC-705 的 IP（开远程服务器后）
 export RADIO_USER=radio_user        # 电台里设置的远程 ID 用户名
 export RADIO_PASSWORD=your_password
 

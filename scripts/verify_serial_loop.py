@@ -21,7 +21,7 @@
     # 本机 RemoteUty (默认绑源端口 50002, 匹配真机会话识别)
     python scripts\\verify_serial_loop.py --host 127.0.0.1
     # 局域网 RemoteUty (绑本机 LAN IP 源端口)
-    python scripts\\verify_serial_loop.py --host 192.168.0.23 --bind-ip 192.168.0.23
+    python scripts\\verify_serial_loop.py --host 192.0.2.20 --bind-ip 192.0.2.20
 
 返回:
     打印各会话标识组合下的 read_freq 响应与解析频率。
@@ -36,14 +36,13 @@ _SRC = Path(__file__).resolve().parent.parent / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
+from rsba1.mailslot import civ_response as civresp  # noqa: E402
 from rsba1.serial.serial_client import (  # noqa: E402
-    SerialClient,
     DEFAULT_SERIAL_PORT,
     DEFAULT_SESSION_F8,
     DEFAULT_SESSION_FC,
+    SerialClient,
 )
-from rsba1.mailslot import civ_response as civresp     # noqa: E402
-from rsba1.ctypes_wrappers import civ_commands as civcmd  # noqa: E402
 
 
 def _run_serial_loop(host, port, f8, fc, timeout, tag, bind_port=None, bind_ip=None,

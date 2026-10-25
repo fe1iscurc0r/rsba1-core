@@ -1,0 +1,54 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not paste radio passwords or your real LAN address. Use `192.0.2.x` in examples.
+        Security issues go through SECURITY.md, not this form.
+  - type: input
+    id: radio
+    attributes:
+      label: Radio model and firmware
+      placeholder: IC-705, firmware 1.44
+    validations:
+      required: true
+  - type: dropdown
+    id: backend
+    attributes:
+      label: Backend
+      options:
+        - radio-link (UDP)
+        - serial (USB CI-V)
+        - mailslot (Windows, UtyCtrl.dll)
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: OS and Python version
+      placeholder: Windows 11, Python 3.12.4
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. export RADIO_HOST=192.0.2.10
+        2. python -m rsba1.mcp read-freq
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs actual
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Output / traceback
+      render: shell

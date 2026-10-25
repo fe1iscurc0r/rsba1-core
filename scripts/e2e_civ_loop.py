@@ -2,10 +2,10 @@
 
 Usage:
     # With credentials as CLI args
-    python scripts/e2e_civ_loop.py --host 192.168.0.31 --user radio_user --pwd secret
+    python scripts/e2e_civ_loop.py --host 192.0.2.10 --user radio_user --pwd secret
 
     # With environment variables (recommended — keeps passwords out of shell history)
-    export RADIO_HOST=192.168.0.31
+    export RADIO_HOST=192.0.2.10
     export RADIO_USER=radio_user
     export RADIO_PASSWORD=secret
     python scripts/e2e_civ_loop.py
@@ -14,10 +14,10 @@ Usage:
     python scripts/e2e_civ_loop.py --dry-run
 
     # Set frequency roundtrip test
-    python scripts/e2e_civ_loop.py --host 192.168.0.31 --user radio_user --pwd secret --set-freq 145000000
+    python scripts/e2e_civ_loop.py --host 192.0.2.10 --user radio_user --pwd secret --set-freq 145000000
 
     # PTT test (WARNING: will transmit!)
-    python scripts/e2e_civ_loop.py --host 192.168.0.31 --user radio_user --pwd secret --ptt
+    python scripts/e2e_civ_loop.py --host 192.0.2.10 --user radio_user --pwd secret --ptt
 
 Prerequisites:
     1. IC-705 powered on, RS-BA1 Server Function enabled (MENU → SET → WLAN)
@@ -36,13 +36,13 @@ _SRC = Path(__file__).resolve().parent.parent / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
+from rsba1.ctypes_wrappers import civ_commands as civcmd
 from rsba1.radio_link import (
-    RadioLink,
     RadioAuthError,
+    RadioLink,
     RadioLinkError,
     RadioTimeoutError,
 )
-from rsba1.ctypes_wrappers import civ_commands as civcmd
 
 
 def main() -> int:

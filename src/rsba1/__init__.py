@@ -7,7 +7,7 @@ This package provides:
 
 Quick start:
     import os
-    os.environ["RADIO_HOST"] = "192.168.0.31"
+    os.environ["RADIO_HOST"] = "192.0.2.10"
     os.environ["RADIO_USER"] = "radio_user"
     os.environ["RADIO_PASSWORD"] = "secret"
 

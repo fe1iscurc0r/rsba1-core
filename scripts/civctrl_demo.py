@@ -19,10 +19,10 @@
 
 from __future__ import annotations
 
-import sys
-import os
-import time
 import argparse
+import os
+import sys
+import time
 import traceback
 
 # 把 src 加入 sys.path (脚本可独立运行)
@@ -31,15 +31,15 @@ _SRC = os.path.abspath(_SRC)
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
+from rsba1.ctypes_wrappers import civ_commands as civcmd
 from rsba1.ctypes_wrappers.civctrl import (
+    DEFAULT_CIVCTRL_DLL_PATH,
     CivCtrlDLL,
     CivCtrlError,
     CivCtrlLoadError,
     CivCtrlStateError,
     CivCtrlTimeoutError,
-    DEFAULT_CIVCTRL_DLL_PATH,
 )
-from rsba1.ctypes_wrappers import civ_commands as civcmd
 
 
 def parse_args(argv=None):
@@ -101,7 +101,7 @@ def do_set_freq(civ, handle, to_addr, from_addr, freq_hz, timeout):
     body = _send_body(to_addr, from_addr, cmd_bytes)
     print(f"[set_freq] 命令体: {_hex(body)}")
     civ.send_and_wait(handle, body, timeout_ms=timeout)
-    print(f"[set_freq] 完成 (电台应已确认)")
+    print("[set_freq] 完成 (电台应已确认)")
 
 
 def do_ptt(civ, handle, to_addr, from_addr, on, timeout):
@@ -157,8 +157,8 @@ def main(argv=None):
         print(f"[错误] DLL 加载失败: {e}", file=sys.stderr)
         print("提示: 检查 --dll-path 是否指向有效的 CivCtrl.dll", file=sys.stderr)
         return 2
-    except Exception as e:
-        print(f"[错误] 加载 DLL 时发生未预期异常:", file=sys.stderr)
+    except Exception:
+        print("[错误] 加载 DLL 时发生未预期异常:", file=sys.stderr)
         traceback.print_exc()
         return 2
 
@@ -198,8 +198,8 @@ def main(argv=None):
         print(f"[错误] 接收超时: {e}", file=sys.stderr)
         print("提示: 增大 --timeout 或检查电台连接/CI-V 波特率", file=sys.stderr)
         return 1
-    except Exception as e:
-        print(f"[错误] 未预期异常:", file=sys.stderr)
+    except Exception:
+        print("[错误] 未预期异常:", file=sys.stderr)
         traceback.print_exc()
         return 1
     finally:

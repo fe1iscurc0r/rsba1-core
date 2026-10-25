@@ -2,14 +2,14 @@
 rigplane (icom-lan) 验证脚本 — 连接 IC-705 并跑基础命令。
 
 用法：
-    python verify_rigplane.py --host 192.168.0.31 --user user1 --pass YOURPASS
-    python verify_rigplane.py --host 192.168.0.31 --user user1 --pass YOURPASS --ptt   # 含 PTT 测试
+    python verify_rigplane.py --host 192.0.2.10 --user user1 --pass YOURPASS
+    python verify_rigplane.py --host 192.0.2.10 --user user1 --pass YOURPASS --ptt   # 含 PTT 测试
 
 环境前提（IC-705 上必须先做）：
   1. Menu → Set → Connectors → WLAN → Server Function: ON
   2. Menu → Set → Connectors → WLAN → User1 ID + Password (建议 >= 8 字符)
   3. Menu → Set → Connectors → WLAN → Network: 连到本机所在 WLAN
-  4. 电脑 ping 通 192.168.0.31
+  4. 电脑 ping 通 192.0.2.10
 
 本脚本只做：
   - 连接握手
@@ -25,8 +25,6 @@ import asyncio
 import logging
 import socket
 import sys
-import time
-from pathlib import Path
 
 LOG = logging.getLogger("verify_rigplane")
 
@@ -91,7 +89,7 @@ async def test_rigplane(
     LOG.info("[1/6] 导入 rigplane ...")
     try:
         import rigplane
-        from rigplane import create_radio, LanBackendConfig, MetersCapable
+        from rigplane import LanBackendConfig, MetersCapable, create_radio
 
         LOG.info("    rigplane v%s", getattr(rigplane, "__version__", "?"))
     except Exception as e:
@@ -106,10 +104,8 @@ async def test_rigplane(
         return 11
 
     LOG.info("[3/6] 连接 + 握手 (最多 %.0fs) ...", timeout_s)
-    radio = None
     try:
         async with create_radio(config) as r:
-            radio = r
             LOG.info("    ✓ 连接成功")
 
             # ---- 读频率
@@ -117,7 +113,7 @@ async def test_rigplane(
             try:
                 freq = await asyncio.wait_for(r.get_frequency(), timeout=5.0)
                 LOG.info("    ✓ 频率 = %d Hz (%.3f MHz)", freq, freq / 1e6)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 LOG.error("    ✗ 读频率超时")
                 return 14
             except Exception as e:
@@ -129,7 +125,7 @@ async def test_rigplane(
             try:
                 mode = await asyncio.wait_for(r.get_mode(), timeout=5.0)
                 LOG.info("    ✓ 模式 = %s", mode)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 LOG.error("    ✗ 读模式超时")
                 return 15
             except Exception as e:
@@ -142,7 +138,7 @@ async def test_rigplane(
                     LOG.info("    ✓ S-meter = %s", s)
                 else:
                     LOG.info("    (radio 不实现 MetersCapable，跳过 S-meter)")
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 LOG.warning("    ! S-meter 超时（非致命）")
             except Exception as e:
                 LOG.warning("    ! S-meter 读取异常（非致命）: %r", e)
@@ -182,7 +178,7 @@ async def test_rigplane(
 # ---------------------------------------------------------------------------
 def main() -> int:
     p = argparse.ArgumentParser(description="rigplane IC-705 连接验证脚本")
-    p.add_argument("--host", default="192.168.0.31", help="IC-705 IP（默认 192.168.0.31）")
+    p.add_argument("--host", default="192.0.2.10", help="IC-705 IP（默认 192.0.2.10）")
     p.add_argument("--user", default="user1", help="User ID (默认 user1，需在 IC-705 上预先设置)")
     p.add_argument("--pass", dest="password", default="", help="Password (需在 IC-705 上预先设置)")
     p.add_argument("--ptt", action="store_true", help="包含 PTT 测试（默认跳过）")

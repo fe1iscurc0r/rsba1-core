@@ -34,8 +34,8 @@ if _SRC_DIR not in sys.path:
 from rsba1.serial.command_client import (  # noqa: E402
     A8_PACKET_LEN,
     AUTH_PACKET_LEN,
-    CMD_HEADER_SIZE,
     CMD_CONNECT,
+    CMD_HEADER_SIZE,
     CMD_KEEPALIVE,
     CONNECT_TRANS_PACKET_LEN,
     LOGIN_PACKET_LEN,
@@ -67,7 +67,7 @@ from rsba1.serial.command_client import (  # noqa: E402
     passcode,
 )
 
-SID_LOCAL = 0x0017C351     # 192.168.0.23:50001
+SID_LOCAL = 0x0217C351     # 192.0.2.23:50001
 SID_REMOTE = 0x8C7D457A   # 假设的电台 SID
 AUTH_ID = b"\x5d\x37\x12\x82\x3b\xde"  # kappanhang 示例 authID
 
@@ -99,7 +99,7 @@ class FakeCommandServer:
         while not self._stop.is_set():
             try:
                 data, addr = self.sock.recvfrom(0x1000)
-            except socket.timeout:
+            except TimeoutError:
                 continue
             except OSError:  # socket 已关闭
                 break
@@ -317,18 +317,18 @@ class TestPasscode(unittest.TestCase):
 
 class TestLocalSID(unittest.TestCase):
     def test_value(self):
-        self.assertEqual(make_local_sid("192.168.0.23", 50001), 0x0017C351)
-        self.assertEqual(make_local_sid("192.168.0.23", 50002), 0x0017C352)
+        self.assertEqual(make_local_sid("192.0.2.23", 50001), 0x0217C351)
+        self.assertEqual(make_local_sid("192.0.2.23", 50002), 0x0217C352)
 
     def test_ip_low16_only(self):
-        # 仅末两字节参与: 10.0.0.23 与 192.168.0.23 同 SID
-        self.assertEqual(make_local_sid("10.0.0.23", 50001), 0x0017C351)
+        # 仅末两字节参与: 10.0.2.23 与 192.0.2.23 同 SID
+        self.assertEqual(make_local_sid("10.0.2.23", 50001), 0x0217C351)
 
 
 class TestHandshakePackets(unittest.TestCase):
     def test_pkt3(self):
         pkt = build_pkt3(SID_LOCAL)
-        self.assertEqual(pkt, bytes.fromhex("10000000" "0300" "0000" "0017c351" "00000000"))
+        self.assertEqual(pkt, bytes.fromhex("10000000" "0300" "0000" "0217c351" "00000000"))
 
     def test_pkt6(self):
         pkt = build_pkt6(SID_LOCAL, SID_REMOTE)

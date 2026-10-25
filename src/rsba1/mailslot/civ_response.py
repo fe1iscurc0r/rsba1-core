@@ -1,7 +1,7 @@
 """civ_response — 把 RemoteUtyCtrlRes Mailslot 原始字节解析成 CI-V 响应。
 
 用途 (P4 闭环):
-    陆墨通过 RemoteUtyCtrlCmd 发送 CI-V 命令后, RemoteUtility 会把电台应答
+    客户端通过 RemoteUtyCtrlCmd 发送 CI-V 命令后, RemoteUtility 会把电台应答
     写入 RemoteUtyCtrlRes Mailslot (RemoteController 未运行时由本包独占创建)。
     本模块负责把从 RemoteUtyCtrlRes 读到的"原始字节"里, 弹性地提取出
     CI-V 应答帧, 再解析成 频率 / 模式 / S-meter / PTT 等结构化值。
@@ -22,8 +22,6 @@
     - 待 p4-1 probe_res_response.py 真机输出修正封装假设
 """
 from __future__ import annotations
-
-from typing import Optional, Tuple
 
 from rsba1.ctypes_wrappers import civ_commands as civcmd
 
@@ -132,7 +130,7 @@ def find_civ_frame(blob: bytes) -> bytes:
 # 通用应答解析
 # ============================================================
 
-def parse_civ_response(blob: bytes) -> Tuple[int, int, int, bytes]:
+def parse_civ_response(blob: bytes) -> tuple[int, int, int, bytes]:
     """通用解析: 提取 CI-V 应答帧并返回 (to, from, cmd, payload)。
 
     返回元组与 civ_commands.parse_frame 一致:
@@ -152,7 +150,7 @@ def parse_civ_response(blob: bytes) -> Tuple[int, int, int, bytes]:
 # 结构化解析 (频率 / 模式 / S-meter / PTT)
 # ============================================================
 
-def parse_freq(blob: bytes, to_addr: Optional[int] = None) -> int:
+def parse_freq(blob: bytes, to_addr: int | None = None) -> int:
     """解析频率应答 -> Hz。
 
     期望帧: FE FE <from> <to> 0x03 <BCD 5字节> FD
@@ -180,7 +178,7 @@ def parse_freq(blob: bytes, to_addr: Optional[int] = None) -> int:
     return civcmd.bytes_to_freq(payload[:5])
 
 
-def parse_mode(blob: bytes, to_addr: Optional[int] = None) -> Tuple[int, int]:
+def parse_mode(blob: bytes, to_addr: int | None = None) -> tuple[int, int]:
     """解析模式应答 -> (mode_code, filter)。
 
     期望帧: FE FE <from> <to> 0x04 <mode> <filter> FD
@@ -204,7 +202,7 @@ def parse_mode(blob: bytes, to_addr: Optional[int] = None) -> Tuple[int, int]:
     return payload[0], payload[1]
 
 
-def parse_smeter(blob: bytes, to_addr: Optional[int] = None) -> int:
+def parse_smeter(blob: bytes, to_addr: int | None = None) -> int:
     """解析 S-meter 应答 (原始数据字节)。
 
     期望帧: FE FE <from> <to> 0x1A 0x03 <data> FD
@@ -227,7 +225,7 @@ def parse_smeter(blob: bytes, to_addr: Optional[int] = None) -> int:
     return payload[1]
 
 
-def parse_ptt(blob: bytes, to_addr: Optional[int] = None) -> bool:
+def parse_ptt(blob: bytes, to_addr: int | None = None) -> bool:
     """解析 PTT 状态应答 -> bool (True=TX, False=RX)。
 
     期望帧: FE FE <from> <to> 0x14 0x0C <data> FD

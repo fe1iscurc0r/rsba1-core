@@ -24,15 +24,14 @@ from __future__ import annotations
 import os
 import sys
 import time
-import ctypes
 from ctypes import (
-    c_void_p,
+    POINTER,
+    byref,
+    c_char_p,
     c_int,
     c_uint8,
     c_uint16,
-    c_char_p,
-    POINTER,
-    byref,
+    c_void_p,
     create_string_buffer,
 )
 

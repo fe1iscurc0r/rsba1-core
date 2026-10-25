@@ -3,7 +3,7 @@
 设计目标:
     把 CI-V 命令帧包成 ExecCmd payload, 通过 MailslotClient 写入
     \\\\.\\mailslot\\RemoteUtyCtrlCmd, 让本机 RemoteUtility 把 CI-V 命令
-    转发到电台 (如 IC-705)。陆墨作为"第二 RemoteController"无需依赖
+    转发到电台 (如 IC-705)。客户端作为"第二 RemoteController"无需依赖
     RemoteController.exe / UtyCtrl.dll / CivCtrl.dll。
 
 核心发现 (mailslot_server.md §3.2 交叉验证 command_protocol.md §4.3):
@@ -31,8 +31,8 @@
 关键限制:
     - ExecCmd 是 fire-and-forget: 写 Mailslot 后无法直接读响应
     - 响应走 \\\\.\\mailslot\\RemoteUtyCtrlRes (由 RemoteController 创建)
-    - RemoteController 开着时, 响应被 RemoteController 收走, 陆墨只能靠 GUI 看效果
-    - RemoteController 没开时, 陆墨可自行创建 RemoteUtyCtrlRes 独占响应
+    - RemoteController 开着时, 响应被 RemoteController 收走, 客户端只能靠 GUI 看效果
+    - RemoteController 没开时, 客户端可自行创建 RemoteUtyCtrlRes 独占响应
     - arg3 / arg6 / sub_cmd / user_data 格式语义均需动态确认
 
 参考:
@@ -44,20 +44,15 @@
 from __future__ import annotations
 
 import time
-from typing import Optional, Tuple
 
-from rsba1.mailslot.commands import build_exec_cmd
-from rsba1.mailslot.protocol import CMD_EXEC_CMD, MAX_PAYLOAD_SIZE
-from rsba1.mailslot.client import (
-    MailslotClient,
-    MailslotError,
-    MailslotNotFoundError,
-    MailslotWriteError,
-    MailslotTimeoutError,
-    DEFAULT_MAILSLOT_NAME,
-)
 from rsba1.ctypes_wrappers import civ_commands as civcmd
 from rsba1.mailslot import civ_response as civresp
+from rsba1.mailslot.client import (
+    DEFAULT_MAILSLOT_NAME,
+    MailslotClient,
+)
+from rsba1.mailslot.commands import build_exec_cmd
+from rsba1.mailslot.protocol import CMD_EXEC_CMD, MAX_PAYLOAD_SIZE
 
 __all__ = [
     "DEFAULT_TO_ADDR",
@@ -106,7 +101,7 @@ def build_exec_cmd_civ(
     arg3: int = DEFAULT_ARG3,
     arg6: int = DEFAULT_ARG6,
     sub_cmd: int = DEFAULT_SUB_CMD,
-) -> Tuple[bytes, int]:
+) -> tuple[bytes, int]:
     """把 CI-V 帧包成 ExecCmd payload。
 
     核心高层 API: 把任意 CI-V 帧/命令体 bytes 包成 ExecCmd (cmd_code=2)
@@ -162,7 +157,7 @@ def build_read_freq_payload(
     arg3: int = DEFAULT_ARG3,
     arg6: int = DEFAULT_ARG6,
     sub_cmd: int = DEFAULT_SUB_CMD,
-) -> Tuple[bytes, int]:
+) -> tuple[bytes, int]:
     """读频率 CI-V 命令 (cmd=0x03) -> ExecCmd payload。
 
     CI-V 命令体: [to, from, 0x03] (3 字节)
@@ -178,7 +173,7 @@ def build_read_mode_payload(
     arg3: int = DEFAULT_ARG3,
     arg6: int = DEFAULT_ARG6,
     sub_cmd: int = DEFAULT_SUB_CMD,
-) -> Tuple[bytes, int]:
+) -> tuple[bytes, int]:
     """读模式 CI-V 命令 (cmd=0x04) -> ExecCmd payload。
 
     CI-V 命令体: [to, from, 0x04] (3 字节)
@@ -195,7 +190,7 @@ def build_set_freq_payload(
     arg3: int = DEFAULT_ARG3,
     arg6: int = DEFAULT_ARG6,
     sub_cmd: int = DEFAULT_SUB_CMD,
-) -> Tuple[bytes, int]:
+) -> tuple[bytes, int]:
     """设频率 CI-V 命令 (cmd=0x06 + 5 字节 BCD) -> ExecCmd payload。
 
     参数:
@@ -217,7 +212,7 @@ def build_ptt_on_payload(
     arg3: int = DEFAULT_ARG3,
     arg6: int = DEFAULT_ARG6,
     sub_cmd: int = DEFAULT_SUB_CMD,
-) -> Tuple[bytes, int]:
+) -> tuple[bytes, int]:
     """PTT ON (TX) CI-V 命令 (cmd=0x1C 0x00 0x01) -> ExecCmd payload。
 
     CI-V 命令体: [to, from, 0x1C, 0x00, 0x01] (5 字节)
@@ -232,7 +227,7 @@ def build_ptt_off_payload(
     arg3: int = DEFAULT_ARG3,
     arg6: int = DEFAULT_ARG6,
     sub_cmd: int = DEFAULT_SUB_CMD,
-) -> Tuple[bytes, int]:
+) -> tuple[bytes, int]:
     """PTT OFF (RX) CI-V 命令 (cmd=0x1C 0x00 0x00) -> ExecCmd payload。
 
     CI-V 命令体: [to, from, 0x1C, 0x00, 0x00] (5 字节)
@@ -247,7 +242,7 @@ def build_read_smeter_payload(
     arg3: int = DEFAULT_ARG3,
     arg6: int = DEFAULT_ARG6,
     sub_cmd: int = DEFAULT_SUB_CMD,
-) -> Tuple[bytes, int]:
+) -> tuple[bytes, int]:
     """读 S-meter CI-V 命令 (cmd=0x1A 0x03) -> ExecCmd payload。
 
     CI-V 命令体: [to, from, 0x1A, 0x03] (4 字节)
@@ -262,7 +257,7 @@ def build_raw_civ_payload(
     arg3: int = DEFAULT_ARG3,
     arg6: int = DEFAULT_ARG6,
     sub_cmd: int = DEFAULT_SUB_CMD,
-) -> Tuple[bytes, int]:
+) -> tuple[bytes, int]:
     """原始 CI-V 帧 -> ExecCmd payload (透传, 不添加 to/from 地址)。
 
     与 build_exec_cmd_civ 相同, 显式命名以区分"原始帧"与"高层构造"场景。
@@ -310,7 +305,7 @@ class CivViaExecCmdSender:
         arg3: int = DEFAULT_ARG3,
         arg6: int = DEFAULT_ARG6,
         sub_cmd: int = DEFAULT_SUB_CMD,
-        backend: Optional[str] = None,
+        backend: str | None = None,
     ):
         self.to_addr = to_addr & 0xFF
         self.from_addr = from_addr & 0xFF
@@ -327,7 +322,7 @@ class CivViaExecCmdSender:
         """关闭 Mailslot 写入端 (幂等)。"""
         self._client.close()
 
-    def __enter__(self) -> "CivViaExecCmdSender":
+    def __enter__(self) -> CivViaExecCmdSender:
         self.open()
         return self
 
@@ -401,7 +396,7 @@ class CivViaExecCmdSender:
     # ==========================================================
     # 闭环查询 (query) — 发送命令 + 读 RemoteUtyCtrlRes + 解析
     # ==========================================================
-    # 前置条件: RemoteController 未运行, 陆墨可独占创建 RemoteUtyCtrlRes。
+    # 前置条件: RemoteController 未运行, 客户端可独占创建 RemoteUtyCtrlRes。
     # RemoteController 运行时该 mailslot 被占用, 闭环查询会失败,
     # 此时只能用上面 fire-and-forget 的 send_* 方法。
     # ==========================================================
@@ -412,7 +407,7 @@ class CivViaExecCmdSender:
         parse_fn,
         *,
         timeout_ms: int = 2000,
-        reader: Optional["ResponseReader"] = None,
+        reader: ResponseReader | None = None,
     ):
         """发送命令, 从 RemoteUtyCtrlRes 读取响应并解析 (完整闭环)。
 
@@ -461,7 +456,7 @@ class CivViaExecCmdSender:
             timeout_ms=timeout_ms,
         )
 
-    def query_mode(self, timeout_ms: int = 2000) -> Tuple[int, int]:
+    def query_mode(self, timeout_ms: int = 2000) -> tuple[int, int]:
         """闭环查询模式 -> (mode_code, filter)。"""
         return self.query(
             self.send_read_mode,
@@ -488,10 +483,10 @@ class CivViaExecCmdSender:
 # ============================================================
 # ResponseReader — 可选的响应 Mailslot 读取器
 # ============================================================
-# 仅当 RemoteController 未运行时, 陆墨可自行创建 RemoteUtyCtrlRes
+# 仅当 RemoteController 未运行时, 客户端可自行创建 RemoteUtyCtrlRes
 # mailslot 独占接收响应 (mailslot_server.md §5.4 方案 A)。
 # RemoteController 运行时, 该 mailslot 已被 RemoteController 创建,
-# 陆墨创建会失败 — 此时只能 fire-and-forget。
+# 客户端创建会失败 — 此时只能 fire-and-forget。
 # ============================================================
 
 
@@ -507,7 +502,7 @@ class ResponseReader:
     """可选的响应 Mailslot 读取器 (创建 RemoteUtyCtrlRes 并读取响应)。
 
     用途:
-        RemoteController 未运行时, 陆墨自行创建 RemoteUtyCtrlRes
+        RemoteController 未运行时, 客户端自行创建 RemoteUtyCtrlRes
         作为 server/reader, 独占接收 RemoteUtility 的响应包。
 
     限制:
@@ -543,8 +538,8 @@ class ResponseReader:
         if self._handle is not None:
             return
         try:
-            import win32file  # type: ignore
             import pywintypes  # type: ignore
+            import win32file  # type: ignore
             try:
                 self._handle = win32file.CreateMailslot(
                     self.mailslot_name,
@@ -602,7 +597,7 @@ class ResponseReader:
             self._handle = None
             self._backend = None
 
-    def read(self, timeout_ms: Optional[int] = None) -> Optional[bytes]:
+    def read(self, timeout_ms: int | None = None) -> bytes | None:
         """ReadFile 读取一条响应消息 (阻塞直到有消息或超时)。
 
         参数:
@@ -620,9 +615,9 @@ class ResponseReader:
             return self._read_pywin32(timeout_ms)
         return self._read_ctypes(timeout_ms)
 
-    def _read_pywin32(self, timeout_ms: Optional[int]) -> Optional[bytes]:
-        import win32file  # type: ignore
+    def _read_pywin32(self, timeout_ms: int | None) -> bytes | None:
         import pywintypes  # type: ignore
+        import win32file  # type: ignore
 
         timeout = timeout_ms if timeout_ms is not None else self.default_timeout_ms
         deadline = time.time() + (timeout / 1000.0) if timeout > 0 else None
@@ -642,7 +637,7 @@ class ResponseReader:
                 return None
             time.sleep(0.01)
 
-    def _read_ctypes(self, timeout_ms: Optional[int]) -> Optional[bytes]:
+    def _read_ctypes(self, timeout_ms: int | None) -> bytes | None:
         import ctypes
         from ctypes import wintypes
 
@@ -690,7 +685,7 @@ class ResponseReader:
                 return None
             time.sleep(0.01)
 
-    def __enter__(self) -> "ResponseReader":
+    def __enter__(self) -> ResponseReader:
         self.open()
         return self
 

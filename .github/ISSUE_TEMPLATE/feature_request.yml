@@ -1,0 +1,37 @@
+name: Feature request
+description: Propose a capability or a change in behaviour
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the workflow that is currently impossible or awkward. Not the solution — the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behaviour
+    validations:
+      required: true
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Which layer does this touch?
+      options:
+        - Protocol / session
+        - CI-V command layer
+        - MCP tools
+        - CLI
+        - Serial backend
+        - Mailslot backend
+        - Docs
+    validations:
+      required: true
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: This is not audio streaming (UDP 50003) or spectrum scope (0x27 00) — those are out of scope, see README

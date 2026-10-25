@@ -75,7 +75,7 @@ credential_and_session.md + capture_todo.md):
     见 tools/probe_command_connect.py (完整登录 → Serial 透传闭环探测)。
 
 用法 (旧链路, PC 服务器):
-    with CommandClient(host="192.168.1.10", username="u", password="p") as c:
+    with CommandClient(host="192.0.2.10", username="u", password="p") as c:
         ok = c.connect()
         c.keepalive()
 
@@ -89,7 +89,6 @@ from __future__ import annotations
 
 import socket
 import struct
-from typing import Optional, Tuple
 
 __all__ = [
     "DEFAULT_COMMAND_PORT",
@@ -330,7 +329,7 @@ def build_pkt7(
     local_sid: int,
     remote_sid: int,
     seq: int,
-    reply_id: Optional[bytes] = None,
+    reply_id: bytes | None = None,
     inner_seq: int = 0x8304,
 ) -> bytes:
     """21B keepalive (type=0x0007; kappanhang pkt7.sendDo).
@@ -410,7 +409,7 @@ def build_login_request(
     remote_sid: int,
     outer_seq: int = 1,
     inner_seq: int = 0,
-    auth_start_id: Optional[bytes] = None,
+    auth_start_id: bytes | None = None,
 ) -> bytes:
     """ConnectServer 登录请求 (整包 0x80B; kappanhang sendPktLogin 逐字节复刻).
 
@@ -514,7 +513,7 @@ def build_connect_trans_request(
 # 响应解析
 # ============================================================
 
-def parse_login_response(data: bytes) -> Tuple[bool, bytes, int]:
+def parse_login_response(data: bytes) -> tuple[bool, bytes, int]:
     """解析 ConnectServer 应答 (0x60B).
 
     返回 (ok, auth_id, result_code):
@@ -533,7 +532,7 @@ def parse_login_response(data: bytes) -> Tuple[bool, bytes, int]:
     return result == 0, auth_id, result
 
 
-def parse_connect_trans_response(data: bytes) -> Tuple[bool, int, int, bytes, str]:
+def parse_connect_trans_response(data: bytes) -> tuple[bool, int, int, bytes, str]:
     """解析 ConnectTrans 应答 (144B).
 
     返回 (ok, new_remote_sid, new_local_sid, new_auth_id, dev_name):
@@ -556,7 +555,7 @@ def parse_connect_trans_response(data: bytes) -> Tuple[bool, int, int, bytes, st
     return ok, new_remote, new_local, new_auth_id, dev_name
 
 
-def parse_auth_reply_magic(data: bytes) -> Optional[int]:
+def parse_auth_reply_magic(data: bytes) -> int | None:
     """从 0x40B 巩固包应答取 magic (abs[21]; 0x02=GetInfo, 0x05=KeepAlive).
 
     非巩固包应答返回 None。
@@ -676,7 +675,7 @@ def build_command_header(
     )
 
 
-def parse_command_header(data: bytes) -> Tuple[int, int, int, int, int]:
+def parse_command_header(data: bytes) -> tuple[int, int, int, int, int]:
     """解析 Command wire 头.
 
     参数:
@@ -797,7 +796,7 @@ class CommandClient:
         self.password = password
         self.memo = memo
         self.timeout = timeout
-        self._sock: Optional[socket.socket] = None
+        self._sock: socket.socket | None = None
         self._seq = 1          # Command 信道 seq (BE uint16, 发送侧递增)
         self.field_8 = 0       # 登录后由响应确立的会话标识
         self.field_C = 0
@@ -824,7 +823,7 @@ class CommandClient:
             finally:
                 self._sock = None
 
-    def __enter__(self) -> "CommandClient":
+    def __enter__(self) -> CommandClient:
         self.open()
         return self
 
@@ -848,7 +847,7 @@ class CommandClient:
             raise CommandClientError("CommandClient 未 open")
         return self._sock.sendto(pkt, (self.host, self.port))
 
-    def recv(self, timeout: Optional[float] = None) -> bytes:
+    def recv(self, timeout: float | None = None) -> bytes:
         """接收一个 UDP 数据报 (原始 bytes).
 
         参数:
@@ -867,7 +866,7 @@ class CommandClient:
             try:
                 data, _ = self._sock.recvfrom(0x1000)
                 return data
-            except socket.timeout:
+            except TimeoutError:
                 raise CommandTimeoutError(
                     f"接收 Command 数据超时 ({timeout if timeout is not None else self.timeout} s)"
                 )
@@ -879,7 +878,7 @@ class CommandClient:
     # 业务命令
     # ============================================================
 
-    def connect(self, timeout: Optional[float] = None) -> bool:
+    def connect(self, timeout: float | None = None) -> bool:
         """发送 ConnectServer 请求并等待响应.
 
         认证成功 (响应 type == 0x0002) 返回 True, 并据响应建立会话标识。
@@ -908,7 +907,7 @@ class CommandClient:
         self.connected = True
         return True
 
-    def keepalive(self, timeout: Optional[float] = None) -> bool:
+    def keepalive(self, timeout: float | None = None) -> bool:
         """发送 KeepAlive 心跳并等待响应.
 
         响应 type == 0x0502 视为成功。
@@ -930,7 +929,7 @@ class CommandClient:
     # ============================================================
 
     @staticmethod
-    def _parse_response(data: bytes) -> Tuple[int, int, int, int]:
+    def _parse_response(data: bytes) -> tuple[int, int, int, int]:
         """从响应包解析 (type, seq, field_8, field_C).
 
         异常:

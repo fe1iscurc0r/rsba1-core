@@ -13,22 +13,22 @@
 
 参考逆向资料 (本仓库):
     - phase2-re/notes/pe_analysis/UtyCtrl_deep_analysis.md
-        * Mailslot 名 \\.\mailslot\\RemoteUtyCtrlCmd (RemoteUtility 创建/读)
-        * 响应 Mailslot 名 \\.\mailslot\\RemoteUtyCtrlRes (UtyCtrl 创建/读)
+        * Mailslot 名 \\.\\mailslot\\RemoteUtyCtrlCmd (RemoteUtility 创建/读)
+        * 响应 Mailslot 名 \\.\\mailslot\\RemoteUtyCtrlRes (UtyCtrl 创建/读)
         * Mutex 名 "Icom RemoteUtyCtrl" (5000ms 超时)
         * 命令包格式: {cmd_code:1, data_len:1, reserved:2, payload[data_len]}
         * 9 个 cmd_code (0..8) 与每个 Get*/ExecCmd 导出函数对应
 """
 
 from rsba1.mailslot import protocol  # noqa: F401  (re-export)
+from rsba1.mailslot.client import MailslotClient, MailslotError
 from rsba1.mailslot.protocol import (
     COMMAND_HEADER_FORMAT,
     COMMAND_HEADER_SIZE,
     MAX_PAYLOAD_SIZE,
-    serialize_command,
     deserialize_command,
+    serialize_command,
 )
-from rsba1.mailslot.client import MailslotClient, MailslotError
 
 __all__ = [
     "protocol",

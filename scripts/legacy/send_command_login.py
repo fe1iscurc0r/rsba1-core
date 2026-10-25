@@ -13,9 +13,9 @@ ConnectServer 请求完成认证, 并可发送 KeepAlive 心跳。
 
 用法:
     cd d:\\my git\\rs-ba1-reverse
-    python scripts\\send_command_login.py --host 192.168.1.10 --user alice --pass secret connect
-    python scripts\\send_command_login.py --host 192.168.1.10 --user alice --pass secret keepalive
-    python scripts\\send_command_login.py -v --host 192.168.1.10 --user alice --pass secret connect
+    python scripts\\send_command_login.py --host 192.0.2.10 --user alice --pass secret connect
+    python scripts\\send_command_login.py --host 192.0.2.10 --user alice --pass secret keepalive
+    python scripts\\send_command_login.py -v --host 192.0.2.10 --user alice --pass secret connect
 
 注意:
     - Command 信道的 header 布局为静态推断 (见 command_client.py 存疑项),

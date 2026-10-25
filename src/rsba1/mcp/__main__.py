@@ -14,10 +14,10 @@ Usage:
     python -m rsba1.mcp --transport sse --host 0.0.0.0 --port 8765
 
     # With credentials via CLI args (or env vars: RADIO_HOST, RADIO_USER, RADIO_PASSWORD)
-    python -m rsba1.mcp --host 192.168.0.31 --user radio_user --pwd secret
+    python -m rsba1.mcp --host 192.0.2.10 --user radio_user --pwd secret
 
 Environment variables (recommended — avoids putting credentials in CLI history):
-    RADIO_HOST=192.168.0.31
+    RADIO_HOST=192.0.2.10
     RADIO_USER=radio_user
     RADIO_PASSWORD=your_password
 
@@ -30,7 +30,6 @@ from __future__ import annotations
 
 import argparse
 import sys
-from typing import Optional
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -74,7 +73,7 @@ def _build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def _resolve_setting(name: str, cli_val: Optional[str], env_var: str) -> str:
+def _resolve_setting(name: str, cli_val: str | None, env_var: str) -> str:
     val = (cli_val or "").strip()
     if val:
         return val
@@ -84,15 +83,14 @@ def _resolve_setting(name: str, cli_val: Optional[str], env_var: str) -> str:
     return ""
 
 
-def main(argv: Optional[list] = None) -> int:
-    import os as _os
+def main(argv: list | None = None) -> int:
     args = _build_parser().parse_args(argv)
 
     # ── One-shot command mode ────────────────────────────────────────────────
     if args.command and args.command != "help":
-        from rsba1.mcp.radio_link_server import create_radio_link_server
-        from rsba1.radio_link import RadioLink, RadioTimeoutError
         from rsba1.mailslot.civ_response import MODE_NAMES
+        from rsba1.mcp.radio_link_server import create_radio_link_server
+        from rsba1.radio_link import RadioLink
 
         host = _resolve_setting("host", args.host, "RADIO_HOST")
         user = _resolve_setting("user", args.username, "RADIO_USER")
@@ -110,7 +108,6 @@ def main(argv: Optional[list] = None) -> int:
         link = RadioLink(**kwargs)
         try:
             link.open()
-            orig_freq = link.read_freq()
 
             if args.command == "read-freq":
                 freq = link.read_freq()

@@ -7,14 +7,14 @@
     - 句柄校验 / civOpen 失败 / 上下文管理器自动关闭
 
 运行:
-    set PYTHONPATH=...\src && python -m unittest tests.test_civctrl_mock
+    set PYTHONPATH=...\\src && python -m unittest tests.test_civctrl_mock
     或:  python tests\test_civctrl_mock.py
 """
 
 from __future__ import annotations
 
-import sys
 import os
+import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -24,6 +24,7 @@ _SRC = os.path.abspath(_SRC)
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
+from rsba1.ctypes_wrappers import civ_commands as civcmd
 from rsba1.ctypes_wrappers import civctrl
 from rsba1.ctypes_wrappers.civctrl import (
     CivCtrlDLL,
@@ -32,8 +33,6 @@ from rsba1.ctypes_wrappers.civctrl import (
     CivCtrlStateError,
     CivCtrlTimeoutError,
 )
-from rsba1.ctypes_wrappers import civ_commands as civcmd
-
 
 # ============================================================
 # CI-V 帧构造 / 解析 测试

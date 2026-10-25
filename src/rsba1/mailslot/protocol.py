@@ -21,13 +21,12 @@
 
 命令码常量来源:
     - 0..8 取自 UtyCtrl_deep_analysis.md 4.2 命令码映射表 (静态反汇编)
-    - 待沈遥动态逆向最终确认后可覆盖; 当前值已与 9 个导出函数一一对应。
+    - 待实机动态逆向最终确认后可覆盖; 当前值已与 9 个导出函数一一对应。
 """
 
 from __future__ import annotations
 
 import struct
-from typing import Tuple
 
 __all__ = [
     "COMMAND_HEADER_FORMAT",
@@ -68,7 +67,7 @@ MAX_PACKET_SIZE = COMMAND_HEADER_SIZE + MAX_PAYLOAD_SIZE
 
 
 # ============================================================
-# 9 个命令码常量 (UtyCtrl.dll 静态反汇编结果, 待沈遥动态确认)
+# 9 个命令码常量 (UtyCtrl.dll 静态反汇编结果, 待实机动态确认)
 # ============================================================
 # 对应 UtyCtrl.dll 9 个导出函数:
 #   # | 名称                       | Ordinal | VA          | cmd_code | data_len
@@ -198,7 +197,7 @@ def serialize_command(cmd_code: int, payload: bytes = b"",
     return header + payload
 
 
-def deserialize_command(data: bytes) -> Tuple[int, int, int, bytes]:
+def deserialize_command(data: bytes) -> tuple[int, int, int, bytes]:
     """反序列化 Mailslot 命令包 (与 serialize_command 互逆)。
 
     参数:

@@ -18,7 +18,7 @@
     其余进 inbox 队列; 业务线程只从 inbox 消费 (带 stash 回推, 等包不乱序)。
 
 用法:
-    with RadioLink("192.168.0.31", "radio_user", "change_me") as link:
+    with RadioLink("192.0.2.10", "radio_user", "change_me") as link:
         print(link.read_freq() / 1e6, "MHz")
         link.set_freq(145_000_000)   # 白名单内
         link.set_freq(orig_hz)       # 恢复
@@ -36,11 +36,10 @@ import socket
 import struct
 import threading
 import time
-from typing import Optional, Tuple
 
+from rsba1.ctypes_wrappers import civ_commands as civcmd
 from rsba1.serial import command_client as cc
 from rsba1.serial.serial_codec import build_serial_frame
-from rsba1.ctypes_wrappers import civ_commands as civcmd
 
 __all__ = [
     "RadioLinkError",
@@ -93,10 +92,10 @@ class _Chan:
         self.local_sid = cc.make_local_sid(local[0], local[1])
         self.remote_sid = 0
         self.tx_seq = 1                     # tracked 数据包序号 (从 1 起)
-        self.inbox: "queue.Queue[bytes]" = queue.Queue()
-        self.stash: "collections.deque[bytes]" = collections.deque()
+        self.inbox: queue.Queue[bytes] = queue.Queue()
+        self.stash: collections.deque[bytes] = collections.deque()
         self._stop = threading.Event()
-        self._reader: Optional[threading.Thread] = None
+        self._reader: threading.Thread | None = None
         if verbose:
             _log(name, f"本地 {local[0]}:{local[1]} localSID=0x{self.local_sid:08X}")
 
@@ -125,7 +124,7 @@ class _Chan:
             while not self._stop.is_set():
                 try:
                     data, _ = self.sock.recvfrom(0x2000)
-                except socket.timeout:
+                except TimeoutError:
                     continue
                 except OSError:
                     break
@@ -144,7 +143,7 @@ class _Chan:
             target=_loop, name=f"{self.name}-reader", daemon=True)
         self._reader.start()
 
-    def _take(self, timeout: float) -> Optional[bytes]:
+    def _take(self, timeout: float) -> bytes | None:
         """从 stash/inbox 取一个报文."""
         if self.stash:
             return self.stash.popleft()
@@ -153,7 +152,7 @@ class _Chan:
         except queue.Empty:
             return None
 
-    def wait_for(self, pred, timeout: float, label: str = "") -> Optional[bytes]:
+    def wait_for(self, pred, timeout: float, label: str = "") -> bytes | None:
         """等待满足 pred 的报文; 不匹配的**保留**供后续阶段消费."""
         deadline = time.time() + timeout
         held = []
@@ -253,15 +252,15 @@ class RadioLink:
         """(重)建信道与全部会话状态 (open 重试时复用)."""
         self.ctrl = _Chan(self.host, 50001, self.bind_ip, "control", self.verbose)
         self.ser = _Chan(self.host, 50002, self.bind_ip, "serial", self.verbose)
-        self.aud: Optional[_Chan] = (
+        self.aud: _Chan | None = (
             _Chan(self.host, 50003, self.bind_ip, "audio", self.verbose)
             if self.audio else None)
-        self.auth_id: Optional[bytes] = None
+        self.auth_id: bytes | None = None
         self._sseq = 0                       # Serial 层 BE 序号
         self._serial_opened = False          # serial open(magic=0x05) 是否已发
         self._audio_opened = False           # audio 握手是否已完成
         self._reauth_stop = threading.Event()
-        self._reauth_thread: Optional[threading.Thread] = None
+        self._reauth_thread: threading.Thread | None = None
 
     # ---------------- 生命周期 ----------------
 
@@ -273,7 +272,7 @@ class RadioLink:
         """
         if self._opened:
             return
-        last_err: Optional[Exception] = None
+        last_err: Exception | None = None
         for attempt in range(1, retries + 1):
             try:
                 if not self.ctrl.handshake():
@@ -357,7 +356,7 @@ class RadioLink:
         self._audio_opened = False
         self._opened = False
 
-    def __enter__(self) -> "RadioLink":
+    def __enter__(self) -> RadioLink:
         self.open()
         return self
 
@@ -533,7 +532,7 @@ class RadioLink:
         resp = self._civ_query(civcmd.read_freq_bytes(), 0x03, timeout)
         return civcmd.bytes_to_freq(resp[5:10])
 
-    def read_mode(self, timeout: float = 2.0) -> Tuple[int, int]:
+    def read_mode(self, timeout: float = 2.0) -> tuple[int, int]:
         """读当前模式, 返回 (mode, filter) 原始枚举字节."""
         resp = self._civ_query(bytes([0x04]), 0x04, timeout)
         if len(resp) < 7:

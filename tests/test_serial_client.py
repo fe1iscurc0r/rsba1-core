@@ -30,22 +30,21 @@ _SRC_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
-from rsba1.serial.serial_codec import (  # noqa: E402
-    WIRE_HEADER_SIZE,
-    UDP2_PKT_TYPE_DATA,
-    UDP2_PKT_TYPE_PKT3,
-    UDP2_PKT_TYPE_PKT4,
-    UDP2_PKT_TYPE_PKT6,
-    UDP2_PKT_TYPE_KEEPALIVE,
-    build_wire_header,
-    parse_wire_header,
-    parse_serial_frame,
-)
-
 from rsba1.serial.serial_client import (  # noqa: E402
     SerialClient,
     SerialClientError,
     SerialTimeoutError,
+)
+from rsba1.serial.serial_codec import (  # noqa: E402
+    UDP2_PKT_TYPE_DATA,
+    UDP2_PKT_TYPE_KEEPALIVE,
+    UDP2_PKT_TYPE_PKT3,
+    UDP2_PKT_TYPE_PKT4,
+    UDP2_PKT_TYPE_PKT6,
+    WIRE_HEADER_SIZE,
+    build_wire_header,
+    parse_serial_frame,
+    parse_wire_header,
 )
 
 # 伪服务器本地会话标识; pkt4/pkt6 回传给客户端, 作为客户端 remoteSID (field_C)
@@ -75,7 +74,7 @@ class FakeServer:
         while not self._stop.is_set():
             try:
                 data, addr = self.sock.recvfrom(0x1000)
-            except socket.timeout:
+            except TimeoutError:
                 continue
             except OSError:  # socket 已关闭
                 break

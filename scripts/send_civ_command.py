@@ -2,11 +2,11 @@
 
 把 CI-V 命令 (read_freq / read_mode / set_freq / ptt_on / ptt_off /
 read_smeter / raw) 包成 ExecCmd (cmd_code=2) payload, 通过 MailslotClient
-写入 \\.\mailslot\RemoteUtyCtrlCmd, 让本机 RemoteUtility 转发到电台。
+写入 \\.\\mailslot\\RemoteUtyCtrlCmd, 让本机 RemoteUtility 转发到电台。
 
 核心特性:
     - fire-and-forget (ExecCmd 不直接读响应)
-    - 可选 --read-response: RemoteController 未运行时, 陆墨自行创建
+    - 可选 --read-response: RemoteController 未运行时, 客户端自行创建
       RemoteUtyCtrlRes mailslot 独占接收响应 (方案 A)
     - --dry-run: 仅打印构造的 payload, 不实际写入
     - 完整 hex dump 输出 (CI-V 帧 / ExecCmd payload / 写入字节数)
@@ -43,32 +43,32 @@ _SRC_DIR = _SCRIPT_DIR.parent / "src"
 if str(_SRC_DIR) not in sys.path:
     sys.path.insert(0, str(_SRC_DIR))
 
-from rsba1.mailslot.client import (  # noqa: E402
-    MailslotError,
-    MailslotNotFoundError,
-    MailslotWriteError,
-    MailslotTimeoutError,
-    DEFAULT_MAILSLOT_NAME,
-)
-from rsba1.mailslot.protocol import CMD_EXEC_CMD  # noqa: E402
 from rsba1.mailslot.civ_via_execcmd import (  # noqa: E402
-    DEFAULT_TO_ADDR,
-    DEFAULT_FROM_ADDR,
-    DEFAULT_SUB_CMD,
     DEFAULT_ARG3,
     DEFAULT_ARG6,
+    DEFAULT_FROM_ADDR,
+    DEFAULT_SUB_CMD,
+    DEFAULT_TO_ADDR,
     RESPONSE_MAILSLOT_NAME,
-    build_exec_cmd_civ,
-    build_read_freq_payload,
-    build_read_mode_payload,
-    build_set_freq_payload,
-    build_ptt_on_payload,
-    build_ptt_off_payload,
-    build_read_smeter_payload,
     CivViaExecCmdSender,
     ResponseReader,
     ResponseReadError,
+    build_exec_cmd_civ,
+    build_ptt_off_payload,
+    build_ptt_on_payload,
+    build_read_freq_payload,
+    build_read_mode_payload,
+    build_read_smeter_payload,
+    build_set_freq_payload,
 )
+from rsba1.mailslot.client import (  # noqa: E402
+    DEFAULT_MAILSLOT_NAME,
+    MailslotError,
+    MailslotNotFoundError,
+    MailslotTimeoutError,
+    MailslotWriteError,
+)
+from rsba1.mailslot.protocol import CMD_EXEC_CMD  # noqa: E402
 
 LOG = logging.getLogger("send_civ")
 
@@ -161,7 +161,7 @@ def do_send(args: argparse.Namespace) -> int:
         print(f"[错误] payload 构造失败: {e}", file=sys.stderr)
         return 2
 
-    print(f"\n=== CI-V via ExecCmd ===")
+    print("\n=== CI-V via ExecCmd ===")
     print(f"命令: {desc}")
     print(f"Mailslot: {args.mailslot}")
     print(f"ExecCmd 参数: arg3={args.arg3} arg6={args.arg6} sub_cmd={args.sub_cmd}")
@@ -170,10 +170,10 @@ def do_send(args: argparse.Namespace) -> int:
     print(hex_dump(payload))
 
     if args.dry_run:
-        print(f"\n[dry-run] 未实际写入 Mailslot")
+        print("\n[dry-run] 未实际写入 Mailslot")
         return 0
 
-    print(f"\n--- 写入 Mailslot ---")
+    print("\n--- 写入 Mailslot ---")
     written = 0
     try:
         with CivViaExecCmdSender(
@@ -192,7 +192,7 @@ def do_send(args: argparse.Namespace) -> int:
         print(f"  data_len = {data_len}")
     except MailslotNotFoundError as e:
         print(f"\n[失败] Mailslot 不存在: {e}", file=sys.stderr)
-        print(f"  请确认 RS-BA1 GUI (RemoteUtility.exe) 正在运行", file=sys.stderr)
+        print("  请确认 RS-BA1 GUI (RemoteUtility.exe) 正在运行", file=sys.stderr)
         return 3
     except MailslotTimeoutError as e:
         print(f"\n[失败] Mailslot 写入超时: {e}", file=sys.stderr)
@@ -206,16 +206,16 @@ def do_send(args: argparse.Namespace) -> int:
 
     # 可选: 读响应 (仅 RemoteController 未运行时可用)
     if args.read_response:
-        print(f"\n--- 读响应 Mailslot ---")
+        print("\n--- 读响应 Mailslot ---")
         print(f"响应 Mailslot: {RESPONSE_MAILSLOT_NAME}")
         try:
             with ResponseReader(read_timeout_ms=args.response_timeout) as reader:
-                print(f"已创建响应 Mailslot (独占模式), 等待响应...")
+                print("已创建响应 Mailslot (独占模式), 等待响应...")
                 # 给 RemoteUtility 一点时间处理并回响应
                 resp = reader.read(timeout_ms=args.response_timeout)
                 if resp is None:
                     print(f"[超时] {args.response_timeout}ms 内无响应")
-                    print(f"  可能原因: 电台未连 / RemoteController 抢占了响应 / 命令未触发响应")
+                    print("  可能原因: 电台未连 / RemoteController 抢占了响应 / 命令未触发响应")
                 else:
                     print(f"\n收到响应 ({len(resp)} 字节):")
                     print(hex_dump(resp))
@@ -229,7 +229,7 @@ def do_send(args: argparse.Namespace) -> int:
             print(f"\n[响应读取失败] {e}", file=sys.stderr)
             print(f"  通常因 RemoteController 正在运行, 已占用 {RESPONSE_MAILSLOT_NAME}",
                   file=sys.stderr)
-            print(f"  RemoteController 开着时只能 fire-and-forget, 靠 GUI 看效果",
+            print("  RemoteController 开着时只能 fire-and-forget, 靠 GUI 看效果",
                   file=sys.stderr)
             return 7
 
@@ -268,7 +268,7 @@ def _try_parse_civ_response(resp: bytes) -> None:
             mode = modes.get(payload[0], f"未知(0x{payload[0]:02X})")
             print(f"    -> 读模式响应: mode={mode} filter={payload[1]}")
         elif cmd == 0x06:
-            print(f"    -> 设频率确认 (echo)")
+            print("    -> 设频率确认 (echo)")
         elif cmd == 0x1C:
             ptt_state = "ON (TX)" if len(payload) >= 2 and payload[1] == 0x01 else "OFF (RX)"
             print(f"    -> PTT 确认: {ptt_state}")

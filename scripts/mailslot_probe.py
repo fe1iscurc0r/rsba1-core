@@ -2,8 +2,8 @@
 
 任务:
     1. 列举系统上所有可能的 Mailslot (FindFirstFileW + 备用 cmd `dir`)
-    2. 尝试打开候选 Mailslot 名 (含任务占位值 \\.\mailslot\\civsend 和
-       现有静态反汇编推断值 \\.\mailslot\\RemoteUtyCtrlCmd)
+    2. 尝试打开候选 Mailslot 名 (含任务占位值 \\.\\mailslot\\civsend 和
+       现有静态反汇编推断值 \\.\\mailslot\\RemoteUtyCtrlCmd)
     3. 对存在的 Mailslot, 发送 cmd_open / cmd_count 探活包, 看是否被接收
     4. 输出结构化探测报告
 
@@ -31,7 +31,6 @@ import os
 import subprocess
 import sys
 from ctypes import wintypes
-from typing import List, Optional, Tuple
 
 # 把 src/ 加到 sys.path, 让 rsba1.mailslot 可被 import
 _SRC_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -39,20 +38,19 @@ if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
 from rsba1.mailslot import protocol as P  # noqa: E402
-from rsba1.mailslot.client import (       # noqa: E402
+from rsba1.mailslot.client import (  # noqa: E402
+    INVALID_HANDLE_VALUE,
     MailslotClient,
     MailslotError,
     MailslotNotFoundError,
-    MailslotWriteError,
     MailslotTimeoutError,
-    INVALID_HANDLE_VALUE,
+    MailslotWriteError,
 )
-
 
 # ============================================================
 # 候选 Mailslot 名清单 (按可能性排序)
 # ============================================================
-# 1. 任务规格占位值 (待沈遥动态确认)
+# 1. 任务规格占位值 (待实机动态确认)
 # 2. 现有静态反汇编推断值 (UtyCtrl_deep_analysis.md 5.4):
 #    - RemoteUtyCtrlCmd : UtyCtrl -> RemoteUtility 命令通道 (本客户端要写的目标)
 #    - RemoteCivCtrlCmd : CivCtrl -> RemoteUtility (CI-V 控制)
@@ -74,10 +72,10 @@ CANDIDATE_MAILSLOT_NAMES = [
 # 1. 列举系统 Mailslot
 # ============================================================
 
-def list_mailslots_via_findfirstfile() -> List[str]:
-    """用 FindFirstFileW / FindNextFileW 列举 \\.\mailslot\\* 下的 mailslot。
+def list_mailslots_via_findfirstfile() -> list[str]:
+    """用 FindFirstFileW / FindNextFileW 列举 \\.\\mailslot\\* 下的 mailslot。
 
-    返回: 找到的 mailslot 短名列表 (不含 \\.\mailslot\\ 前缀)。
+    返回: 找到的 mailslot 短名列表 (不含 \\.\\mailslot\\ 前缀)。
 
     说明:
         - Win32 Mailslot 名字空间支持 FindFirstFile/FindNextFile 枚举 (本机)
@@ -116,7 +114,7 @@ def list_mailslots_via_findfirstfile() -> List[str]:
         # 错误码: ERROR_FILE_NOT_FOUND (2) = 无 mailslot, ERROR_PATH_NOT_FOUND (3) = 路径错
         return []
 
-    names: List[str] = []
+    names: list[str] = []
     try:
         # 第一个结果已经在 find_data 里
         # 跳过 "." / ".."
@@ -133,8 +131,8 @@ def list_mailslots_via_findfirstfile() -> List[str]:
     return names
 
 
-def list_mailslots_via_cmd_dir() -> Tuple[List[str], str]:
-    """备用: 用 cmd `dir \\.\mailslot\\` 列举 mailslot。
+def list_mailslots_via_cmd_dir() -> tuple[list[str], str]:
+    """备用: 用 cmd `dir \\.\\mailslot\\` 列举 mailslot。
 
     返回: (mailslot 短名列表, cmd 原始输出)
 
@@ -168,7 +166,7 @@ def list_mailslots_via_cmd_dir() -> Tuple[List[str], str]:
     output_lower = output.lower()
     has_failure = any(m.lower() in output_lower for m in failure_markers)
 
-    names: List[str] = []
+    names: list[str] = []
     if has_failure:
         # cmd 报错了, 不解析 (避免误把错误信息里的词当成 mailslot 名)
         return names, output
@@ -198,7 +196,7 @@ def list_mailslots_via_cmd_dir() -> Tuple[List[str], str]:
 # 2. 探测单个 Mailslot 是否存在
 # ============================================================
 
-def probe_mailslot_exists(mailslot_name: str) -> Tuple[bool, str]:
+def probe_mailslot_exists(mailslot_name: str) -> tuple[bool, str]:
     """尝试用 CreateFile(GENERIC_WRITE, OPEN_EXISTING) 打开 mailslot。
 
     返回: (exists, detail_message)
@@ -224,7 +222,7 @@ def probe_mailslot_exists(mailslot_name: str) -> Tuple[bool, str]:
 
 def send_probe_packet(mailslot_name: str,
                       cmd_code: int = P.CMD_GET_COUNT_CLIENT_TRANS,
-                      payload: bytes = b"") -> Tuple[bool, str]:
+                      payload: bytes = b"") -> tuple[bool, str]:
     """向存在的 mailslot 发送探活命令包, 报告结果。
 
     选用 CMD_GET_COUNT_CLIENT_TRANS (cmd_code=0, payload 空) 作为最安全的探活命令:
@@ -264,7 +262,7 @@ def print_section(title: str) -> None:
     print(f"\n{line}\n{title}\n{line}")
 
 
-def print_report(list_only: bool, extra_names: List[str]) -> int:
+def print_report(list_only: bool, extra_names: list[str]) -> int:
     """主报告生成。返回退出码 (0 = 至少一个 mailslot 探测成功)。"""
     print_section("Mailslot 探测报告")
     print(f"主机: {os.environ.get('COMPUTERNAME', '?')}")
@@ -317,8 +315,8 @@ def print_report(list_only: bool, extra_names: List[str]) -> int:
             seen.add(c)
             unique_candidates.append(c)
 
-    found_alive: List[str] = []
-    found_writable: List[str] = []
+    found_alive: list[str] = []
+    found_writable: list[str] = []
     for name in unique_candidates:
         exists, detail = probe_mailslot_exists(name)
         marker = "[存在]" if exists else "[不存在]"
@@ -368,7 +366,7 @@ def print_report(list_only: bool, extra_names: List[str]) -> int:
 # 5. CLI 入口
 # ============================================================
 
-def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(
         prog="mailslot_probe",
         description="系统级 Mailslot 探测脚本 (RS-BA1 V2 RemoteUtility IPC)"
@@ -388,7 +386,7 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     extra = [n.strip() for n in args.extra.split(",") if n.strip()]
     return print_report(list_only=args.list_only, extra_names=extra)
